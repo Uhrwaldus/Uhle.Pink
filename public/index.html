@@ -129,6 +129,29 @@
   }
   .hb-red { background: #a33; } .hb-yellow { background: #a90; } .hb-green { background: #2a7; }
   .hb-blue { background: #36c; } .hb-white { background: #ccc; color: #222; }
+
+  /* card faces (love letter / coup) */
+  .ll-card {
+    width: 108px; min-height: 152px; border-radius: 12px; margin: 4px;
+    background: linear-gradient(165deg, #2b3046, #1a1d29);
+    border: 2px solid var(--cc, #3a4057);
+    display: inline-flex; flex-direction: column; padding: 8px; text-align: center;
+    vertical-align: top; cursor: pointer; color: var(--text);
+    box-shadow: 0 4px 12px rgba(0,0,0,.35);
+    transition: transform .08s ease;
+  }
+  .ll-card:hover { transform: translateY(-3px); }
+  .ll-card.static { cursor: default; }
+  .ll-card.static:hover { transform: none; }
+  .ll-card .llv { font-weight: 800; font-size: 1.05rem; text-align: left; color: var(--cc); line-height: 1; }
+  .ll-card .llart { font-size: 2.3rem; margin: 6px 0 2px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
+  .ll-card .llname { font-weight: 700; font-size: .82rem; letter-spacing: .03em; }
+  .ll-card .lltext { font-size: .58rem; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+  .ll-mini {
+    display: inline-flex; align-items: center; gap: 3px; border-radius: 6px;
+    border: 1px solid var(--cc, #3a4057); padding: 1px 6px; margin: 1px;
+    font-size: .68rem; font-weight: 700; color: var(--cc);
+  }
 </style>
 </head>
 <body>

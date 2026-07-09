@@ -2,6 +2,22 @@
 (() => {
   let pendingAct = null; // action waiting for a target
 
+  const ROLE_ART = {
+    Duke: { e: '🏛️', c: '#b58ff0', t: 'Tax: take 3 coins. Blocks foreign aid.' },
+    Assassin: { e: '🗡️', c: '#8fa3c7', t: 'Pay 3 to assassinate a player.' },
+    Captain: { e: '⚓', c: '#7fd4c1', t: 'Steal 2 coins. Blocks stealing.' },
+    Ambassador: { e: '🤝', c: '#ffd166', t: 'Exchange cards. Blocks stealing.' },
+    Contessa: { e: '🌂', c: '#ff8fb3', t: 'Blocks assassination.' },
+  };
+  function roleFace(r, opts = {}) {
+    const a = ROLE_ART[r];
+    return `<div class="ll-card${opts.click ? '' : ' static'}" style="--cc:${a.c};min-height:130px;width:96px" ${opts.attr || ''}>
+      <div class="llart" style="margin-top:8px">${a.e}</div>
+      <div class="llname">${r}</div>
+      <div class="lltext">${a.t}</div>
+    </div>`;
+  }
+
   function render(root, S) {
     const g = S.game;
     const myTurn = g.current === S.you && g.phase === 'turn';
@@ -14,7 +30,7 @@
       return `<span class="pill" style="${dead ? 'opacity:.4;text-decoration:line-through' : ''}${id === g.current ? ';outline:2px solid var(--band2)' : ''}">
         ${esc(playerName(id))} 💰${g.coins[id]} 🂠${g.counts[id]}${g.dead[id].length ? ' ☠' + g.dead[id].join(',☠') : ''}</span>`;
     }).join('') + `</div>`;
-    html += `<p style="text-align:center">your cards: ` + g.yourCards.map(r => `<span class="pill" style="border:1px solid var(--band4)">${r}</span>`).join('') + `</p>`;
+    html += `<div style="display:flex;justify-content:center;flex-wrap:wrap">` + g.yourCards.map(r => roleFace(r)).join('') + `</div>`;
 
     if (g.phase === 'turn' && myTurn && !pendingAct) {
       const c = g.coins[S.you];
@@ -71,16 +87,16 @@
 
     if (g.phase === 'lose') {
       if (g.losePick === S.you) {
-        html += `<p class="big" style="text-align:center;color:var(--red)">You lose influence — pick a card to reveal:</p><div style="text-align:center">` +
-          g.yourCards.map(r => `<button class="hand-card" data-lose="${r}">${r}</button>`).join('') + `</div>`;
+        html += `<p class="big" style="text-align:center;color:var(--red)">You lose influence — pick a card to reveal:</p><div style="display:flex;justify-content:center;flex-wrap:wrap">` +
+          g.yourCards.map(r => roleFace(r, { click: true, attr: `data-lose="${r}"` })).join('') + `</div>`;
       } else {
         html += `<p class="big" style="text-align:center">${esc(playerName(g.losePick))} is losing influence…</p>`;
       }
     }
     if (g.phase === 'exchange') {
       if (g.exchangePool) {
-        html += `<p class="big" style="text-align:center">Pick ${g.exchangeKeep} to keep:</p><div style="text-align:center" id="cp-ex">` +
-          g.exchangePool.map((r, i) => `<button class="hand-card" data-ex="${i}" data-role="${r}">${r}</button>`).join('') + `</div>
+        html += `<p class="big" style="text-align:center">Pick ${g.exchangeKeep} to keep:</p><div style="display:flex;justify-content:center;flex-wrap:wrap" id="cp-ex">` +
+          g.exchangePool.map((r, i) => roleFace(r, { click: true, attr: `data-ex="${i}" data-role="${r}"` })).join('') + `</div>
           <button id="cp-ex-ok" style="width:100%;margin-top:8px">Confirm</button>`;
       } else {
         html += `<p class="big" style="text-align:center">🔄 exchange in progress…</p>`;
