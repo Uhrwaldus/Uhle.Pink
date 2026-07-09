@@ -394,7 +394,90 @@ async function testResistance() {
   Object.values(players).forEach(p => p.disconnect());
 }
 
-const TESTS = { justone: testJustOne, resistance: testResistance, werewolf: testWerewolf, themind: testTheMind, spyfall: testSpyfall, loveletter: testLoveLetter, coup: testCoup, codenames: testCodenames, hanabi: testHanabi };
+async function testUndercover() {
+  const { names, players, states } = await setup(4, 'undercover'); // pad to 5 below
+  // need 5 players for Mr. White — add one more socket
+  const extra = 'P5';
+  players[extra] = connect();
+  players[extra].on('state', s => { states[extra] = s; });
+  await wait(300);
+  await new Promise((res, rej) => players[extra].emit('join_room', { code: states.P1.code, name: extra }, r => r.error ? rej(new Error(r.error)) : res()));
+  const five = ['P1', 'P2', 'P3', 'P4', 'P5'];
+  players.P1.emit('start_game');
+  await wait(400);
+  let g = states.P1.game;
+  assert(g && g.phase === 'describe', 'undercover did not start');
+  const white = five.find(n => states[n].game.isWhite);
+  assert(white, 'no Mr. White with 5 players');
+  const words = five.filter(n => n !== white).map(n => states[n].game.word);
+  const civWord = words.sort((a, b) => words.filter(w => w === a).length - words.filter(w => w === b).length).pop();
+  const ucName = five.find(n => n !== white && states[n].game.word !== civWord);
+  assert(ucName, 'no undercover found');
+  assert(states[white].game.word === null, 'white must have no word');
+
+  const byId = id => five.find(n => states[n].you === id);
+  async function describeAll() {
+    let safety = 0;
+    while (states.P1.game.phase === 'describe' && safety++ < 30) {
+      const d = states.P1.game.describer;
+      players[byId(d)].emit('action', { type: 'describe', text: 'hmm' });
+      await wait(150);
+    }
+    assert(states.P1.game.phase === 'vote', 'expected vote phase');
+  }
+  async function voteAll(targetName) {
+    const targetId = states[targetName].you;
+    for (const n of five) {
+      const mg = states[n].game;
+      if (mg.alive[states[n].you] && !mg.youVoted && states[n].you !== targetId) {
+        players[n].emit('action', { type: 'vote', pid: targetId });
+        await wait(120);
+      }
+    }
+    // target must also vote (someone else)
+    const mg = states[targetName].game;
+    if (mg.alive[targetId] && !mg.youVoted) {
+      const other = five.find(n => n !== targetName && mg.alive[states[n].you]);
+      players[targetName].emit('action', { type: 'vote', pid: states[other].you });
+      await wait(200);
+    }
+    await wait(200);
+  }
+  // round 1: vote out Mr. White; he guesses WRONG
+  await describeAll();
+  await voteAll(white);
+  g = states.P1.game;
+  assert(g.phase === 'whiteguess', 'white should get a guess, got ' + g.phase);
+  players[white].emit('action', { type: 'white_guess', word: 'definitely-wrong' });
+  await wait(300);
+  g = states.P1.game;
+  assert(g.phase === 'describe', 'game should continue after wrong guess, got ' + g.phase);
+  // round 2: vote out the undercover -> civilians win
+  await describeAll();
+  await voteAll(ucName);
+  g = states.P1.game;
+  assert(g.phase === 'gameover' && g.winner === 'civilians', 'civilians should win, got ' + g.winner + '/' + g.phase);
+  assert(g.civWord && g.roles, 'reveal data missing');
+  console.log(`undercover: white-guess + civilian win OK (word: ${g.civWord} vs ${g.ucWord})`);
+
+  // rematch: eliminate white, guess CORRECTLY -> white wins
+  players.P1.emit('action', { type: 'rematch' });
+  await wait(400);
+  const white2 = five.find(n => states[n].game.isWhite);
+  const words2 = five.filter(n => n !== white2).map(n => states[n].game.word);
+  const civ2 = words2.sort((a, b) => words2.filter(w => w === a).length - words2.filter(w => w === b).length).pop();
+  await describeAll();
+  await voteAll(white2);
+  assert(states.P1.game.phase === 'whiteguess', 'white2 should guess');
+  players[white2].emit('action', { type: 'white_guess', word: civ2 });
+  await wait(300);
+  g = states.P1.game;
+  assert(g.winner === 'white', 'correct guess should win for white, got ' + g.winner);
+  console.log('undercover: Mr. White steal-the-win OK');
+  Object.values(players).forEach(p => p.disconnect());
+}
+
+const TESTS = { undercover: testUndercover, justone: testJustOne, resistance: testResistance, werewolf: testWerewolf, themind: testTheMind, spyfall: testSpyfall, loveletter: testLoveLetter, coup: testCoup, codenames: testCodenames, hanabi: testHanabi };
 
 async function main() {
   const server = spawn('node', [path.join(__dirname, '..', 'server.js')], {

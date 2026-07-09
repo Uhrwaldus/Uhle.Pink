@@ -17,6 +17,7 @@ const GAMES = {
   werewolf: require('./games/werewolf'),
   justone: require('./games/justone'),
   resistance: require('./games/resistance'),
+  undercover: require('./games/undercover'),
 };
 
 const app = express();
@@ -55,6 +56,15 @@ function recordCoopScore(room) {
   saveLeaderboard();
   return leaderboard[s.totalRounds].indexOf(entry) + 1 || null;
 }
+
+// deploy helper: is anyone connected right now?
+app.get('/busy', (req, res) => {
+  let busy = false;
+  for (const room of rooms.values()) {
+    if ([...room.players.values()].some(p => p.connected)) { busy = true; break; }
+  }
+  res.json({ busy });
+});
 
 app.get('/leaderboard', (req, res) => {
   const rounds = parseInt(req.query.rounds, 10);
