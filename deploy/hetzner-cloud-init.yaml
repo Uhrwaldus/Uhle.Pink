@@ -1,0 +1,77 @@
+#cloud-config
+# Paste this into the "Cloud config" / user data box when creating a Hetzner server.
+# On first boot it installs Node + Caddy, clones the game, gets HTTPS for uhle.pink,
+# and auto-deploys new GitHub commits every 5 minutes.
+
+package_update: true
+packages:
+  - git
+  - curl
+  - ufw
+  - debian-keyring
+  - debian-archive-keyring
+  - apt-transport-https
+
+runcmd:
+  # firewall: ssh + web only
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+
+  # Node.js 22
+  - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  - apt-get install -y nodejs
+
+  # Caddy (automatic HTTPS)
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+  - apt-get update
+  - apt-get install -y caddy
+
+  # the game
+  - git clone https://github.com/Uhrwaldus/Uhle.Pink.git /opt/minigames
+  - cd /opt/minigames && npm install --omit=dev
+
+  # run as a service (auto-restart, starts on boot)
+  - |
+    cat > /etc/systemd/system/minigames.service <<'EOF'
+    [Unit]
+    Description=Mini Games (uhle.pink)
+    After=network.target
+    [Service]
+    WorkingDirectory=/opt/minigames
+    ExecStart=/usr/bin/node server.js
+    Environment=PORT=3000
+    Environment=NODE_ENV=production
+    Restart=always
+    RestartSec=3
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+  - systemctl daemon-reload
+  - systemctl enable --now minigames
+
+  # HTTPS reverse proxy for the domain
+  - |
+    cat > /etc/caddy/Caddyfile <<'EOF'
+    uhle.pink, www.uhle.pink {
+      reverse_proxy localhost:3000
+    }
+    EOF
+  - systemctl restart caddy
+
+  # auto-deploy: pull from GitHub every 5 min, restart only if something changed
+  - |
+    cat > /usr/local/bin/minigames-deploy <<'EOF'
+    #!/bin/bash
+    cd /opt/minigames || exit 0
+    git fetch -q origin main
+    if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+      git reset --hard origin/main -q
+      npm install --omit=dev --silent
+      systemctl restart minigames
+    fi
+    EOF
+  - chmod +x /usr/local/bin/minigames-deploy
+  - echo '*/5 * * * * root /usr/local/bin/minigames-deploy' > /etc/cron.d/minigames-deploy
