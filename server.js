@@ -1,9 +1,6 @@
-// Mini Games server — rooms + Socket.IO transport.
-// Each game lives in games/<name>.js and implements:
-//   create(room)                    -> game state
-//   handleAction(room, player, msg) -> mutates state, returns true if state changed
-//   viewFor(room, player)           -> redacted state for that player
+// Mini Games server — rooms + Socket.IO transport + co-op leaderboard.
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const http = require('http');
 const https = require('https');
@@ -18,6 +15,38 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const rooms = new Map(); // code -> room
+
+// ---- co-op leaderboard (JSON file; per rounds-bracket) ----
+const LB_FILE = path.join(__dirname, 'leaderboard.json');
+let leaderboard = { 10: [], 20: [], 30: [] };
+try { leaderboard = { ...leaderboard, ...JSON.parse(fs.readFileSync(LB_FILE, 'utf8')) }; } catch {}
+
+function saveLeaderboard() {
+  try { fs.writeFileSync(LB_FILE, JSON.stringify(leaderboard)); } catch (e) { console.error('leaderboard save failed:', e.message); }
+}
+
+function recordCoopScore(room) {
+  const s = room.state;
+  const entry = {
+    name: (room.teamName || 'Anonymous').slice(0, 24),
+    score: s.scores.total,
+    max: s.totalRounds * 4,
+    players: [...room.players.values()].map(p => p.name).slice(0, 8),
+    date: new Date().toISOString().slice(0, 10),
+  };
+  const bracket = leaderboard[s.totalRounds] || (leaderboard[s.totalRounds] = []);
+  bracket.push(entry);
+  bracket.sort((a, b) => b.score - a.score);
+  leaderboard[s.totalRounds] = bracket.slice(0, 50);
+  saveLeaderboard();
+  return leaderboard[s.totalRounds].indexOf(entry) + 1 || null;
+}
+
+app.get('/leaderboard', (req, res) => {
+  const rounds = parseInt(req.query.rounds, 10);
+  const bracket = leaderboard[rounds] || [];
+  res.json({ rounds, top: bracket.slice(0, 10) });
+});
 
 function makeCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -34,7 +63,6 @@ function publicPlayers(room) {
   }));
 }
 
-// Send each player their own (possibly redacted) view.
 function broadcast(room) {
   const game = GAMES[room.gameName];
   for (const p of room.players.values()) {
@@ -43,6 +71,9 @@ function broadcast(room) {
       code: room.code,
       you: p.id,
       hostId: room.hostId,
+      mode: room.mode || 'teams',
+      coopRounds: room.coopRounds || 10,
+      teamName: room.teamName || '',
       players: publicPlayers(room),
       game: room.state ? game.viewFor(room, p) : null,
     });
@@ -78,7 +109,6 @@ io.on('connection', (socket) => {
     if (!r) return cb({ error: 'Room not found' });
     if (!name) return cb({ error: 'Name required' });
 
-    // Reclaim seat if a disconnected player has this name.
     let existing = [...r.players.values()].find(p => p.name.toLowerCase() === name.toLowerCase());
     if (existing && existing.connected) return cb({ error: 'That name is taken in this room' });
 
@@ -94,6 +124,33 @@ io.on('connection', (socket) => {
     room = r;
     socket.join(code);
     cb({ ok: true, code, playerId: player.id });
+    broadcast(room);
+  });
+
+  function inLobby(r) {
+    return !r.state || r.state.phase === 'lobby' || r.state.phase === 'gameover';
+  }
+
+  socket.on('set_mode', ({ mode }) => {
+    if (!room || !player || player.id !== room.hostId) return;
+    if (mode !== 'teams' && mode !== 'coop') return;
+    if (!inLobby(room)) return;
+    room.mode = mode;
+    broadcast(room);
+  });
+
+  socket.on('set_rounds', ({ rounds }) => {
+    if (!room || !player || player.id !== room.hostId) return;
+    if (![10, 20, 30].includes(rounds)) return;
+    if (!inLobby(room)) return;
+    room.coopRounds = rounds;
+    broadcast(room);
+  });
+
+  socket.on('set_team_name', ({ name }) => {
+    if (!room || !player || player.id !== room.hostId) return;
+    if (!inLobby(room)) return;
+    room.teamName = String(name || '').trim().slice(0, 24);
     broadcast(room);
   });
 
@@ -122,13 +179,19 @@ io.on('connection', (socket) => {
     const game = GAMES[room.gameName];
     try {
       const changed = game.handleAction(room, player, msg || {});
-      if (changed) broadcast(room);
+      if (changed) {
+        const s = room.state;
+        if (s && s.phase === 'gameover' && s.mode === 'coop' && !s.recorded) {
+          s.recorded = true;
+          s.lbRank = recordCoopScore(room);
+        }
+        broadcast(room);
+      }
     } catch (e) {
       console.error('action error', e);
     }
   });
 
-  // Lightweight live dial movement — no full state broadcast.
   socket.on('dial', ({ pos }) => {
     if (!room || !player || !room.state) return;
     const game = GAMES[room.gameName];
@@ -141,7 +204,6 @@ io.on('connection', (socket) => {
     if (!room || !player) return;
     player.connected = false;
     player.socketId = null;
-    // Drop empty rooms after a grace period.
     const r = room;
     setTimeout(() => {
       if ([...r.players.values()].every(p => !p.connected)) rooms.delete(r.code);
@@ -151,8 +213,6 @@ io.on('connection', (socket) => {
 });
 
 // ---- public share link (tunnel) ----
-// Opens a free localtunnel so friends anywhere can join. If it fails,
-// the game still works locally. Disable with TUNNEL=off.
 let shareInfo = null;
 app.get('/share', (req, res) => res.json(shareInfo || {}));
 
@@ -167,7 +227,6 @@ function fetchText(url) {
 }
 
 async function startTunnel(port) {
-  // No tunnel needed when running on a hosting platform — it has a public URL already.
   const hosted = process.env.RENDER || process.env.RAILWAY_ENVIRONMENT || process.env.FLY_APP_NAME
     || process.env.NODE_ENV === 'production';
   if (process.env.TUNNEL === 'off' || hosted) return;

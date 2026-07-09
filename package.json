@@ -1,6 +1,6 @@
 {
   "name": "mini-games",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Play mini board games online with friends",
   "main": "server.js",
   "scripts": {

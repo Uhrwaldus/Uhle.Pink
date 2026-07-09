@@ -4,6 +4,9 @@ node_modules/
 # portable Node bundled for local play on Windows — not needed on a host
 node/
 
+# saved high scores (created at runtime)
+leaderboard.json
+
 # local junk
 *.log
 .DS_Store
