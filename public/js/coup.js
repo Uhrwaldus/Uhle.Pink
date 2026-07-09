@@ -9,6 +9,26 @@
     Ambassador: { e: '🤝', c: '#ffd166', t: 'Exchange cards. Blocks stealing.' },
     Contessa: { e: '🌂', c: '#ff8fb3', t: 'Blocks assassination.' },
   };
+  function logPanel(g) {
+    return `<div class="side-box ll-log-box"><h4>📜 game log</h4>
+      <div class="entries">${g.log.length ? g.log.map(l => `<div>${esc(l)}</div>`).join('') : '<div>…</div>'}</div></div>`;
+  }
+  function refPanel(g) {
+    const gen = [
+      ['💵', 'Income', 'Take 1 coin.'],
+      ['💶', 'Foreign aid', 'Take 2 coins. Any Duke may block.'],
+      ['💥', 'Coup', 'Pay 7: target loses influence. Unblockable.'],
+    ];
+    return `<div class="side-box ll-ref"><h4>📖 roles & actions</h4>` +
+      Object.entries(ROLE_ART).map(([r, a]) => `<div class="ref-row" style="--cc:${a.c}">
+        <div class="ref-v">${a.e}</div>
+        <div class="ref-txt"><b style="color:${a.c}">${r}</b><span>${a.t}</span></div></div>`).join('') +
+      gen.map(([e, n, t]) => `<div class="ref-row" style="--cc:#9aa0b4">
+        <div class="ref-v">${e}</div>
+        <div class="ref-txt"><b>${n}</b><span>${t}</span></div></div>`).join('') +
+      `<div class="ref-row" style="--cc:#9aa0b4"><div class="ref-v">🙅</div>
+        <div class="ref-txt"><b>Challenge</b><span>Call any claim a bluff. Loser reveals a card.</span></div></div></div>`;
+  }
   function roleFace(r, opts = {}) {
     const a = ROLE_ART[r];
     return `<div class="ll-card${opts.click ? '' : ' static'}" style="--cc:${a.c};min-height:130px;width:96px" ${opts.attr || ''}>
@@ -105,8 +125,9 @@
     if (g.phase === 'gameover') {
       html += `<div class="winner-banner" style="color:var(--band4)">👑 ${esc(playerName(g.winner))} rules!</div>${rematchRow(isHost())}`;
     }
-    html += `<div class="log">${g.log.map(l => `<div>${esc(l)}</div>`).join('')}</div>`;
-    root.innerHTML = html;
+    root.innerHTML = `<div class="ll-layout">${refPanel(g)}<div class="ll-main">${html}</div>${logPanel(g)}</div>`;
+    const _e = root.querySelector('.ll-log-box .entries');
+    if (_e) _e.scrollTop = _e.scrollHeight;
 
     root.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
       const a = b.dataset.act;

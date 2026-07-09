@@ -264,7 +264,7 @@ function viewFor(room, player) {
     exchangePool: (s.phase === 'exchange' && s.exchangeFor && s.exchangeFor.actor === player.id) ? s.exchangeFor.pool : null,
     exchangeKeep: s.exchangeFor ? s.exchangeFor.keep : 0,
     winner: s.winner,
-    log: s.log.slice(-8),
+    log: s.log.slice(-14),
     actions: ACTIONS,
   };
 }

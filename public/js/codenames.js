@@ -1,5 +1,23 @@
 // Codenames client UI
 (() => {
+  function logPanel(g) {
+    return `<div class="side-box ll-log-box"><h4>📜 game log</h4>
+      <div class="entries">${g.log.length ? g.log.map(l => `<div>${esc(l)}</div>`).join('') : '<div>…</div>'}</div></div>`;
+  }
+  function refPanel(g) {
+    const rows = [
+      ['🗣', 'Clue', 'Spymaster: one word + a number (how many tiles relate).'],
+      ['👆', 'Guess', 'Team picks tiles. You get number+1 guesses; stop anytime.'],
+      ['⬜', 'Neutral', 'Ends your turn.'],
+      ['🟥🟦', 'Enemy tile', 'Ends your turn and helps them.'],
+      ['💀', 'Assassin', 'Instant loss. Do not touch.'],
+    ];
+    return `<div class="side-box ll-ref"><h4>📖 rules</h4>` +
+      rows.map(([e, n, t]) => `<div class="ref-row" style="--cc:#9aa0b4">
+        <div class="ref-v">${e}</div>
+        <div class="ref-txt"><b>${n}</b><span>${t}</span></div></div>`).join('') + `</div>`;
+  }
+
   function render(root, S) {
     const g = S.game;
     const m = me();
@@ -37,8 +55,9 @@
     if (g.phase === 'gameover') {
       html += `<div class="winner-banner" style="color:${g.winner === 'blue' ? 'var(--blue)' : 'var(--red)'}">🏆 ${g.winner.toUpperCase()} wins — ${esc(g.reason)}</div>${rematchRow(isHost())}`;
     }
-    html += `<div class="log">${g.log.map(l => `<div>${esc(l)}</div>`).join('')}</div>`;
-    root.innerHTML = html;
+    root.innerHTML = `<div class="ll-layout">${refPanel(g)}<div class="ll-main">${html}</div>${logPanel(g)}</div>`;
+    const _e = root.querySelector('.ll-log-box .entries');
+    if (_e) _e.scrollTop = _e.scrollHeight;
 
     root.querySelectorAll('[data-i]').forEach(b => b.onclick = () => act('pick', { i: +b.dataset.i }));
     const give = root.querySelector('#cn-give');

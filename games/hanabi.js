@@ -163,7 +163,7 @@ function viewFor(room, player) {
     current: current(s),
     finalTurns: s.finalTurns,
     score: s.score, reason: s.reason,
-    log: s.log.slice(-6),
+    log: s.log.slice(-14),
   };
 }
 

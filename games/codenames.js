@@ -153,7 +153,7 @@ function viewFor(room, player) {
     isSpymaster,
     remaining: { blue: remaining(s, 'blue'), red: remaining(s, 'red') },
     winner: s.winner, reason: s.reason,
-    log: s.log.slice(-5),
+    log: s.log.slice(-14),
   };
 }
 

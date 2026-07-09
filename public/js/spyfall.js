@@ -6,6 +6,12 @@
     const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000);
     return `${m}:${String(s).padStart(2, '0')}`;
   }
+  function refPanel(g) {
+    return `<div class="side-box ll-ref"><h4>📖 all locations</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:3px">${g.locations.map(l =>
+        `<span class="pill" style="font-size:.68rem;padding:2px 8px;${!g.isSpy && g.location === l ? 'outline:2px solid var(--band2)' : ''}">${l}</span>`).join('')}</div></div>`;
+  }
+
   function render(root, S) {
     const g = S.game;
     clearInterval(timerH);
@@ -46,7 +52,7 @@
         <p style="text-align:center;color:var(--muted)">the spy was <b>${esc(playerName(g.spyId))}</b> · location: <b>${esc(g.location)}</b></p>
         ${rematchRow(isHost())}`;
     }
-    root.innerHTML = html;
+    root.innerHTML = `<div class="ll-layout"><div class="ll-main">${html}</div>${refPanel(g)}</div>`;
     root.querySelectorAll('[data-accuse]').forEach(b => b.onclick = () => act('accuse', { pid: b.dataset.accuse }));
     const yes = root.querySelector('#sf-yes'), no = root.querySelector('#sf-no');
     if (yes) yes.onclick = () => act('vote', { yes: true });

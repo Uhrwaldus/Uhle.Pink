@@ -10,6 +10,24 @@
     return `<button class="hb-card ${cls}" ${clickable ? `data-card="${i}" style="cursor:pointer"` : 'disabled'}>${label}<small style="font-size:.55rem">${hints}</small></button>`;
   }
 
+  function logPanel(g) {
+    return `<div class="side-box ll-log-box"><h4>📜 game log</h4>
+      <div class="entries">${g.log.length ? g.log.map(l => `<div>${esc(l)}</div>`).join('') : '<div>…</div>'}</div></div>`;
+  }
+  function refPanel(g) {
+    const rows = [
+      ['▶', 'Play', 'Add a card to its color pile. Must be the next number (1→5). Wrong = lose a fuse 💣.'],
+      ['💡', 'Hint', 'Costs a clue. Tell someone all their cards of one color OR one number.'],
+      ['🗑', 'Discard', 'Regain a clue. Careful — some cards exist only once!'],
+      ['🃏', 'Deck', 'Each color: 1×three, 2/3/4×two, 5×one. Finishing a 5 restores a clue.'],
+      ['🏁', 'End', 'All fuses gone, or one last round after the deck empties. Score = pile tops.'],
+    ];
+    return `<div class="side-box ll-ref"><h4>📖 how it works</h4>` +
+      rows.map(([e, n, t]) => `<div class="ref-row" style="--cc:#9aa0b4">
+        <div class="ref-v">${e}</div>
+        <div class="ref-txt"><b>${n}</b><span>${t}</span></div></div>`).join('') + `</div>`;
+  }
+
   function render(root, S) {
     const g = S.game;
     const myTurn = g.current === S.you && g.phase === 'playing';
@@ -60,8 +78,9 @@
     }
 
     if (g.discards.length) html += `<p style="font-size:.7rem;color:var(--muted);text-align:center">discards: ${g.discards.map(c => c.color[0] + c.value).join(' ')}</p>`;
-    html += `<div class="log">${g.log.map(l => `<div>${esc(l)}</div>`).join('')}</div>`;
-    root.innerHTML = html;
+    root.innerHTML = `<div class="ll-layout">${refPanel(g)}<div class="ll-main">${html}</div>${logPanel(g)}</div>`;
+    const _e = root.querySelector('.ll-log-box .entries');
+    if (_e) _e.scrollTop = _e.scrollHeight;
 
     const play = root.querySelector('#hb-play'), disc = root.querySelector('#hb-discard'), cancel = root.querySelector('#hb-cancel');
     if (play) play.onclick = () => { mode = 'play'; render(root, S); };
