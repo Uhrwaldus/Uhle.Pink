@@ -1,0 +1,8 @@
+# Render blueprint — lets Render auto-configure this app when you connect the repo.
+services:
+  - type: web
+    name: mini-games
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
