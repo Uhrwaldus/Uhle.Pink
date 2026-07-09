@@ -57,7 +57,10 @@
     html += `<div style="text-align:center;font-size:.72rem;color:var(--muted);margin:4px 0">` +
       g.order.map(id => `<div>${esc(playerName(id))}: ${g.discards[id].map(v => mini(v)).join(' ') || '—'}</div>`).join('') + `</div>`;
 
-    if (g.priestPeek) html += `<p style="text-align:center;color:var(--band4)">🔍 ${esc(playerName(g.priestPeek.target))} holds ${mini(g.priestPeek.card)} <b>${NAME[g.priestPeek.card]}</b></p>`;
+    if (g.notes && g.notes.length) {
+      html += `<div class="side-box" style="margin:8px 0;text-align:left"><h4>🤫 what you know (this round)</h4>` +
+        g.notes.map(n => `<div style="padding:2px 0">${esc(n)}</div>`).join('') + `</div>`;
+    }
 
     if (g.phase === 'turn') {
       if (myTurn && !pendingCard) {

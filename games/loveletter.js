@@ -49,7 +49,7 @@ function create(room) {
     starterIdx: -1,
     winner: null, roundWinner: null, spyBonus: null,
     deck: [], burned: [], hands: {}, discards: {}, spyPlayed: {},
-    eliminated: {}, protected: {}, current: null, priestPeek: null,
+    eliminated: {}, protected: {}, current: null, notes: {},
     chanc: null, // { pid, options }
     log: [],
   };
@@ -64,7 +64,7 @@ function startRound(room) {
   s.phase = 'turn';
   s.roundWinner = null;
   s.spyBonus = null;
-  s.priestPeek = null;
+  s.notes = Object.fromEntries(s.order.map(id => [id, []]));
   s.chanc = null;
   s.log = [];
   s.deck = fullDeck();
@@ -94,6 +94,10 @@ function eliminate(room, id, why) {
   s.log.push(`${nameOf(room, id)} is out (${why})`);
 }
 
+function note(s, pid, msg) {
+  (s.notes[pid] = s.notes[pid] || []).push(msg);
+}
+
 function targetable(s, byId) {
   return alive(s).filter(id => id !== byId && !s.protected[id]);
 }
@@ -116,6 +120,7 @@ function handleAction(room, player, msg) {
       rest.splice(idx, 1);
       s.hands[player.id] = [keep];
       s.deck.unshift(...rest); // bottom of the deck
+      note(s, player.id, `📜 Chancellor: you kept ${NAME[keep]} (${keep}), returned ${rest.map(v => NAME[v]).join(' + ')} to the bottom`);
       s.log.push(`${nameOf(room, player.id)} kept a card, returned ${rest.length} to the bottom`);
       s.chanc = null;
       s.phase = 'turn';
@@ -162,26 +167,38 @@ function play(room, player, msg) {
   s.log.push(`${nameOf(room, player.id)} played ${NAME[card]}`);
 
   switch (card) {
-    case 0: break; // Spy — no effect now, bonus checked at round end
+    case 0: // Spy — no effect now, bonus checked at round end
+      note(s, player.id, '🕵️ You played a Spy. Survive the round as the only spy-player for a bonus token.');
+      break;
     case 1: { // Guard
       if (!fizzle) {
         const guess = msg.guess;
         if (!(guess >= 0 && guess <= 9) || guess === 1) return false;
         if (s.hands[target][0] === guess) eliminate(room, target, `Guard guessed ${NAME[guess]}`);
-        else s.log.push(`…guessed ${NAME[guess]} on ${nameOf(room, target)} — wrong`);
+        else {
+          s.log.push(`…guessed ${NAME[guess]} on ${nameOf(room, target)} — wrong`);
+          note(s, player.id, `🛡️ Guard: ${nameOf(room, target)} is NOT holding ${NAME[guess]}`);
+        }
       }
       break;
     }
     case 2: { // Priest
-      if (!fizzle) s.priestPeek = { viewer: player.id, target, card: s.hands[target][0] };
+      if (!fizzle) {
+        const c = s.hands[target][0];
+        note(s, player.id, `🔍 Priest: ${nameOf(room, target)} holds ${NAME[c]} (${c})`);
+        note(s, target, `🔍 ${nameOf(room, player.id)} peeked at your hand`);
+      }
       break;
     }
     case 3: { // Baron
       if (!fizzle) {
         const mine = s.hands[player.id][0], theirs = s.hands[target][0];
-        if (mine > theirs) eliminate(room, target, `Baron ${mine} vs ${theirs}`);
-        else if (theirs > mine) eliminate(room, player.id, `Baron ${mine} vs ${theirs}`);
-        else s.log.push('…Baron tie, nothing happens');
+        const duel = `⚔️ Baron: your ${NAME[mine]} (${mine}) vs ${mine > theirs ? '' : ''}`;
+        note(s, player.id, `⚔️ Baron: your ${NAME[mine]} (${mine}) vs ${nameOf(room, target)}'s ${NAME[theirs]} (${theirs}) — ${mine > theirs ? 'you win' : theirs > mine ? 'you lose' : 'tie'}`);
+        note(s, target, `⚔️ Baron: your ${NAME[theirs]} (${theirs}) vs ${nameOf(room, player.id)}'s ${NAME[mine]} (${mine}) — ${theirs > mine ? 'you win' : mine > theirs ? 'you lose' : 'tie'}`);
+        if (mine > theirs) eliminate(room, target, `lost a Baron duel to ${nameOf(room, player.id)}`);
+        else if (theirs > mine) eliminate(room, player.id, `lost a Baron duel to ${nameOf(room, target)}`);
+        else s.log.push('⚔️ Baron duel: a tie — nothing happens');
       }
       break;
     }
@@ -208,6 +225,8 @@ function play(room, player, msg) {
         const tmp = s.hands[player.id];
         s.hands[player.id] = s.hands[target];
         s.hands[target] = tmp;
+        note(s, player.id, `👑 King swap with ${nameOf(room, target)}: you received ${NAME[s.hands[player.id][0]]} (${s.hands[player.id][0]})`);
+        note(s, target, `👑 King swap with ${nameOf(room, player.id)}: you received ${NAME[s.hands[target][0]]} (${s.hands[target][0]})`);
       }
       break;
     }
@@ -280,7 +299,7 @@ function viewFor(room, player) {
     protected: s.protected,
     deckLeft: s.deck.length,
     burnedCount: s.burned.length,
-    priestPeek: (s.priestPeek && s.priestPeek.viewer === player.id) ? s.priestPeek : null,
+    notes: (s.notes && s.notes[player.id]) || [],
     chancYou: (s.chanc && s.chanc.pid === player.id) ? s.chanc.options : null,
     chancWho: s.chanc ? s.chanc.pid : null,
     log: s.log.slice(-14),
