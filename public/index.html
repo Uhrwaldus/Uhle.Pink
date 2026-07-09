@@ -175,7 +175,7 @@
 </style>
 </head>
 <body>
-<h1 id="site-title">🎲 UHLE.PINK</h1>
+<h1 id="site-title" style="cursor:pointer" title="back to dashboard">🎲 UHLE.PINK</h1>
 <div class="tagline">mini board games for game night</div>
 
 <!-- HOME -->
@@ -196,6 +196,7 @@
   <div class="card">
     <div class="room-code" id="lobby-code"></div>
     <div class="room-hint">share this code with your friends</div>
+    <button id="btn-peek-back" style="display:none;width:100%;margin-bottom:12px">▶ Return to the game</button>
     <div id="share-box" style="display:none;background:var(--panel2);border-radius:12px;padding:12px;margin-bottom:14px;text-align:center">
       <div style="font-size:.8rem;color:var(--muted);margin-bottom:6px">🌍 friends elsewhere? send them this link:</div>
       <a id="share-url" href="#" target="_blank" style="color:var(--blue);font-weight:600;word-break:break-all"></a>
@@ -304,7 +305,9 @@ $('btn-join').onclick = () => {
   if (!code) return toast('Enter a room code');
   if (!connected) return toast('Not connected to the server');
   socket.emit('join_room', { code, name }, res => {
-    if (res.error) return toast(res.error);
+    if (res.error) return toast(res.error === 'Room not found'
+      ? 'Room not found — double-check the code with the host (rooms also reset if the server updates)'
+      : res.error);
     saveSession(code, name);
   });
 };
@@ -318,12 +321,22 @@ socket.on('connect', () => {
 socket.on('toast', toast);
 
 // ---------- state routing ----------
+let lobbyPeek = false; // player chose to look at the dashboard while a game runs
 socket.on('state', state => {
-  const prevGame = S && S.gameName;
+  const hadGame = !!(S && S.game);
   S = state;
-  if (!S.game) { renderLobby(); return; }
+  if (!S.game) { lobbyPeek = false; renderLobby(); return; }
+  if (!hadGame) lobbyPeek = false; // a fresh game just started — pull everyone in
+  if (lobbyPeek) { renderLobby(); return; }
   renderGame();
 });
+
+// site title = back to the dashboard (or home if not in a room)
+$('site-title').onclick = () => {
+  if (!S) { show('scr-home'); return; }
+  if (S.game) { lobbyPeek = true; renderLobby(); }
+  else renderLobby();
+};
 socket.on('dial', ({ pos }) => {
   if (GameUI.wavelength && GameUI.wavelength.onDial) GameUI.wavelength.onDial(pos);
 });
@@ -371,6 +384,9 @@ function renderLobby() {
   show('scr-lobby');
   loadShare();
   $('lobby-code').textContent = S.code;
+  const peeking = !!(S.game && lobbyPeek);
+  $('btn-peek-back').style.display = peeking ? '' : 'none';
+  $('btn-peek-back').onclick = () => { lobbyPeek = false; renderGame(); };
   const host = isHost();
 
   // game cards
