@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Mini Games — Wavelength</title>
+<style>
+  :root {
+    --bg: #12141c;
+    --panel: #1c1f2b;
+    --panel2: #252938;
+    --text: #eef0f6;
+    --muted: #9aa0b4;
+    --blue: #4f7cff;
+    --red: #ff5a5f;
+    --band4: #ffd166;
+    --band3: #ff8c5a;
+    --band2: #3ecfb2;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 800px at 50% -200px, #232840, var(--bg));
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 16px;
+    touch-action: manipulation;
+  }
+  h1 { font-size: 1.6rem; margin: 12px 0 2px; letter-spacing: 1px; }
+  .tagline { color: var(--muted); font-size: .85rem; margin-bottom: 18px; }
+  .screen { display: none; width: 100%; max-width: 560px; flex-direction: column; align-items: center; }
+  .screen.active { display: flex; }
+  .card {
+    background: var(--panel); border-radius: var(--radius);
+    padding: 20px; width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,.35);
+  }
+  input[type=text] {
+    width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #3a4057;
+    background: var(--panel2); color: var(--text); font-size: 1rem; margin-bottom: 10px;
+    outline: none;
+  }
+  input[type=text]:focus { border-color: var(--blue); }
+  button {
+    padding: 12px 18px; border-radius: 10px; border: none; cursor: pointer;
+    font-size: 1rem; font-weight: 600; color: #fff; background: var(--blue);
+    transition: transform .06s ease, filter .15s;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.secondary { background: #3a4057; }
+  button.red { background: var(--red); }
+  .row { display: flex; gap: 10px; width: 100%; }
+  .row > * { flex: 1; }
+  .divider { color: var(--muted); text-align: center; margin: 14px 0; font-size: .8rem; }
+
+  /* Lobby */
+  .room-code { font-size: 2.4rem; font-weight: 800; letter-spacing: .35em; text-align: center; margin: 6px 0 2px; }
+  .room-hint { color: var(--muted); text-align: center; font-size: .8rem; margin-bottom: 16px; }
+  .teams { display: flex; gap: 12px; width: 100%; margin-bottom: 14px; }
+  .team-col { flex: 1; background: var(--panel2); border-radius: 12px; padding: 12px; border: 2px solid transparent; }
+  .team-col.blue { border-color: rgba(79,124,255,.5); }
+  .team-col.red { border-color: rgba(255,90,95,.5); }
+  .team-col h3 { font-size: .9rem; margin-bottom: 8px; }
+  .team-col.blue h3 { color: var(--blue); } .team-col.red h3 { color: var(--red); }
+  .team-col ul { list-style: none; min-height: 60px; }
+  .team-col li { padding: 4px 0; font-size: .95rem; }
+  .team-col li.offline { opacity: .4; }
+  .team-col button { width: 100%; margin-top: 8px; padding: 8px; font-size: .85rem; }
+  .unassigned { color: var(--muted); font-size: .85rem; margin-bottom: 12px; text-align: center; }
+
+  /* Game */
+  .scorebar { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; }
+  .score { font-size: 1.5rem; font-weight: 800; padding: 4px 14px; border-radius: 10px; }
+  .score.blue { color: var(--blue); background: rgba(79,124,255,.12); }
+  .score.red  { color: var(--red);  background: rgba(255,90,95,.12); }
+  .score.active-team { outline: 2px solid currentColor; }
+  .round-info { color: var(--muted); font-size: .8rem; text-align: center; }
+  .spectrum {
+    display: flex; justify-content: space-between; width: 100%;
+    font-weight: 700; font-size: 1.05rem; margin: 4px 0 0;
+  }
+  .spectrum .left { color: var(--band2); } .spectrum .right { color: var(--band3); }
+  .dial-wrap { width: 100%; position: relative; }
+  svg { width: 100%; display: block; user-select: none; }
+  .clue-banner {
+    background: var(--panel2); border-radius: 12px; padding: 12px 16px; width: 100%;
+    text-align: center; margin: 10px 0; font-size: 1.15rem; font-weight: 700;
+  }
+  .clue-banner .lbl { display: block; color: var(--muted); font-size: .7rem; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 2px; }
+  .phase-box { width: 100%; text-align: center; margin-top: 8px; }
+  .phase-box p { color: var(--muted); margin-bottom: 10px; font-size: .95rem; }
+  .phase-box .big { color: var(--text); font-size: 1.05rem; }
+  .result-pts { font-size: 1.3rem; font-weight: 800; margin: 6px 0; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #2e3348; padding: 10px 20px; border-radius: 10px; font-size: .9rem;
+    opacity: 0; transition: opacity .3s; pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  }
+  .toast.show { opacity: 1; }
+  .psychic-note { font-size: .8rem; color: var(--band4); margin-top: 6px; }
+  .winner-banner { font-size: 2rem; font-weight: 800; margin: 20px 0; text-align: center; }
+</style>
+</head>
+<body>
+<h1>🌈 WAVELENGTH</h1>
+<div class="tagline">read your friends' minds</div>
+
+<!-- HOME -->
+<div class="screen active" id="scr-home">
+  <div class="card">
+    <input type="text" id="name-input" placeholder="Your name" maxlength="20">
+    <button id="btn-create" style="width:100%">Create a room</button>
+    <div class="divider">— or join a friend —</div>
+    <div class="row">
+      <input type="text" id="code-input" placeholder="Room code" maxlength="4" style="text-transform:uppercase">
+      <button id="btn-join" class="secondary">Join</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOBBY -->
+<div class="screen" id="scr-lobby">
+  <div class="card">
+    <div class="room-code" id="lobby-code"></div>
+    <div class="room-hint">share this code with your friends</div>
+    <div id="share-box" style="display:none;background:var(--panel2);border-radius:12px;padding:12px;margin-bottom:14px;text-align:center">
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:6px">🌍 friends elsewhere? send them this link:</div>
+      <a id="share-url" href="#" target="_blank" style="color:var(--blue);font-weight:600;word-break:break-all"></a>
+      <button id="share-copy" class="secondary" style="display:block;width:100%;margin-top:8px;padding:8px;font-size:.85rem">Copy link</button>
+      <div id="share-pass" style="font-size:.75rem;color:var(--band4);margin-top:8px"></div>
+    </div>
+    <div class="teams">
+      <div class="team-col blue">
+        <h3>BLUE</h3>
+        <ul id="team-blue"></ul>
+        <button data-team="blue">Join Blue</button>
+      </div>
+      <div class="team-col red">
+        <h3>RED</h3>
+        <ul id="team-red"></ul>
+        <button data-team="red" class="red">Join Red</button>
+      </div>
+    </div>
+    <div class="unassigned" id="unassigned"></div>
+    <button id="btn-start" style="width:100%">Start game</button>
+    <p style="color:var(--muted);font-size:.75rem;text-align:center;margin-top:8px">
+      needs 2+ players per team · only the host can start
+    </p>
+  </div>
+</div>
+
+<!-- GAME -->
+<div class="screen" id="scr-game">
+  <div class="scorebar">
+    <div class="score blue" id="score-blue">0</div>
+    <div class="round-info" id="round-info"></div>
+    <div class="score red" id="score-red">0</div>
+  </div>
+  <div class="card">
+    <div class="spectrum">
+      <span class="left" id="card-left"></span>
+      <span class="right" id="card-right"></span>
+    </div>
+    <div class="dial-wrap">
+      <svg id="dial" viewBox="0 0 400 225" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+    <div class="clue-banner" id="clue-banner" style="display:none">
+      <span class="lbl">the clue</span><span id="clue-text"></span>
+    </div>
+    <div class="phase-box" id="phase-box"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// If socket.io didn't load, the page was opened without the server (e.g. by
+// double-clicking index.html). Explain instead of silently doing nothing.
+if (typeof io === 'undefined') {
+  document.getElementById('scr-home').insertAdjacentHTML('afterbegin',
+    `<div class="card" style="margin-bottom:12px;border:1px solid var(--red)">
+       <b style="color:var(--red)">⚠️ Not connected to the game server</b>
+       <p style="color:var(--muted);font-size:.9rem;margin-top:8px">
+         This page can't work on its own — the server must be running.<br><br>
+         1. Open a terminal in the <b>mini-games</b> folder<br>
+         2. Run <code>npm install</code> (first time only), then <code>npm start</code><br>
+         3. Open <b>http://localhost:3000</b> in your browser<br><br>
+         (If your address bar starts with <code>file://</code>, that's the problem.)
+       </p></div>`);
+  throw new Error('socket.io not loaded — server not running');
+}
+const socket = io();
+
+// Show connection problems instead of failing silently.
+let connected = false;
+socket.on('connect', () => { connected = true; });
+socket.on('disconnect', () => { connected = false; });
+socket.on('connect_error', () => {
+  connected = false;
+  toast("Can't reach the game server — is it still running?");
+});
+const $ = id => document.getElementById(id);
+
+let S = null;          // last full state from server
+let dragging = false;
+let localDial = 50;    // needle position we render
+let lastDialSent = 0;
+
+// ---------- helpers ----------
+function show(screen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(screen).classList.add('active');
+}
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('show'), 2500);
+}
+function me() { return S && S.players.find(p => p.id === S.you); }
+function playerName(id) { const p = S && S.players.find(p => p.id === id); return p ? p.name : '?'; }
+function teamColor(t) { return t === 'blue' ? 'var(--blue)' : 'var(--red)'; }
+function teamLabel(t) { return t === 'blue' ? 'Blue' : 'Red'; }
+
+// ---------- join / create ----------
+function saveSession(code, name) { sessionStorage.setItem('wl', JSON.stringify({ code, name })); }
+
+$('btn-create').onclick = () => {
+  const name = $('name-input').value.trim();
+  if (!name) return toast('Enter your name first');
+  if (!connected) return toast("Not connected to the server — is it running?");
+  socket.emit('create_room', { name }, res => {
+    if (res.error) return toast(res.error);
+    saveSession(res.code, name);
+  });
+};
+$('btn-join').onclick = () => {
+  const name = $('name-input').value.trim();
+  const code = $('code-input').value.trim().toUpperCase();
+  if (!name) return toast('Enter your name first');
+  if (!code) return toast('Enter a room code');
+  if (!connected) return toast("Not connected to the server — is it running?");
+  socket.emit('join_room', { code, name }, res => {
+    if (res.error) return toast(res.error);
+    saveSession(code, name);
+  });
+};
+
+// Auto-rejoin after refresh / reconnect.
+socket.on('connect', () => {
+  const saved = sessionStorage.getItem('wl');
+  if (saved && !S) {
+    const { code, name } = JSON.parse(saved);
+    if (code && name) socket.emit('join_room', { code, name }, () => {});
+  }
+});
+
+socket.on('toast', toast);
+
+// ---------- state ----------
+socket.on('state', state => {
+  S = state;
+  if (!S.game || S.game.phase === 'lobby') { renderLobby(); return; }
+  renderGame();
+});
+
+socket.on('dial', ({ pos }) => {
+  if (!dragging) {
+    localDial = pos;
+    if (S && S.game) drawDial();
+  }
+});
+
+// ---------- lobby ----------
+document.querySelectorAll('[data-team]').forEach(btn => {
+  btn.onclick = () => socket.emit('set_team', { team: btn.dataset.team });
+});
+$('btn-start').onclick = () => socket.emit('start_game');
+
+// Fetch the public share link (if the server managed to open a tunnel).
+let shareFetched = false;
+async function loadShare() {
+  if (shareFetched) return;
+  shareFetched = true;
+  let info = null;
+  try {
+    // The tunnel can take a few seconds to open — retry a bit.
+    for (let i = 0; i < 6; i++) {
+      info = await (await fetch('/share')).json();
+      if (info && info.url) break;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    if (!info || !info.url) return;
+    $('share-box').style.display = '';
+    $('share-url').textContent = info.url;
+    $('share-url').href = info.url;
+    if (info.password) {
+      $('share-pass').textContent = `if the link asks for a "tunnel password", it's: ${info.password}`;
+    }
+    $('share-copy').onclick = () => {
+      navigator.clipboard.writeText(info.url + (info.password ? ` (password: ${info.password})` : ''))
+        .then(() => toast('Link copied!'))
+        .catch(() => toast('Copy failed — select the link manually'));
+    };
+  } catch {}
+}
+
+function renderLobby() {
+  show('scr-lobby');
+  loadShare();
+  $('lobby-code').textContent = S.code;
+  for (const team of ['blue', 'red']) {
+    const ul = $('team-' + team);
+    ul.innerHTML = '';
+    S.players.filter(p => p.team === team).forEach(p => {
+      const li = document.createElement('li');
+      li.textContent = p.name + (p.id === S.you ? ' (you)' : '') + (p.id === S.hostId ? ' 👑' : '');
+      if (!p.connected) li.classList.add('offline');
+      ul.appendChild(li);
+    });
+  }
+  const un = S.players.filter(p => !p.team);
+  $('unassigned').textContent = un.length ? 'Picking a team: ' + un.map(p => p.name).join(', ') : '';
+  $('btn-start').style.display = S.you === S.hostId ? '' : 'none';
+}
+
+// ---------- game ----------
+function renderGame() {
+  show('scr-game');
+  const g = S.game;
+  const m = me();
+  const isPsychic = g.psychicId === S.you;
+  const onActive = m.team === g.activeTeam;
+  const canDrag = g.phase === 'guess' && onActive && !isPsychic;
+
+  if (!dragging) localDial = g.dialPos;
+
+  $('score-blue').textContent = g.scores.blue;
+  $('score-red').textContent = g.scores.red;
+  $('score-blue').classList.toggle('active-team', g.activeTeam === 'blue');
+  $('score-red').classList.toggle('active-team', g.activeTeam === 'red');
+  $('round-info').innerHTML = `round ${g.round} · <span style="color:${teamColor(g.activeTeam)}">${teamLabel(g.activeTeam)}</span> guessing · first to ${g.winScore}`;
+  $('card-left').textContent = '◀ ' + g.card[0];
+  $('card-right').textContent = g.card[1] + ' ▶';
+
+  $('clue-banner').style.display = g.clue ? '' : 'none';
+  $('clue-text').textContent = g.clue || '';
+
+  drawDial();
+  renderPhaseBox(g, m, isPsychic, onActive, canDrag);
+}
+
+function renderPhaseBox(g, m, isPsychic, onActive, canDrag) {
+  const box = $('phase-box');
+  box.innerHTML = '';
+  const p = html => { const d = document.createElement('div'); d.innerHTML = html; box.appendChild(d); return d; };
+
+  if (g.phase === 'clue') {
+    if (isPsychic) {
+      p(`<p class="big">You're the psychic! 🧠 The target is shown on the dial.</p>
+         <p>Give a clue that sits at that spot between <b>${g.card[0]}</b> and <b>${g.card[1]}</b>.</p>`);
+      const wrap = p(`<input type="text" id="clue-input" placeholder="Your clue…" maxlength="60">
+                      <button id="btn-clue" style="width:100%">Submit clue</button>`);
+      wrap.querySelector('#btn-clue').onclick = () => {
+        const clue = wrap.querySelector('#clue-input').value.trim();
+        if (!clue) return toast('Write a clue first');
+        socket.emit('action', { type: 'clue', clue });
+      };
+    } else {
+      p(`<p class="big">🤫 <b>${playerName(g.psychicId)}</b> is looking at the target and thinking of a clue…</p>`);
+    }
+  }
+
+  if (g.phase === 'guess') {
+    if (canDrag) {
+      p(`<p class="big">Drag the dial to where you think <b>“${g.clue}”</b> lands. Talk it out with your team!</p>`);
+      const b = p(`<button style="width:100%">🔒 Lock it in</button>`);
+      b.querySelector('button').onclick = () => {
+        socket.emit('dial', { pos: localDial });
+        socket.emit('action', { type: 'lock' });
+      };
+    } else if (isPsychic) {
+      p(`<p class="big">Your team is guessing… you can see the target, so 🤐 no hints!</p><p class="psychic-note">not even facial expressions 👀</p>`);
+    } else {
+      p(`<p class="big">${teamLabel(g.activeTeam)} team is guessing. Get ready to counter!</p>`);
+    }
+  }
+
+  if (g.phase === 'counter') {
+    if (m.team !== g.activeTeam) {
+      p(`<p class="big">Their guess is locked. Is the true target <b>LEFT</b> or <b>RIGHT</b> of their needle? (+1 point)</p>`);
+      const row = p(`<div class="row">
+        <button id="c-left" class="secondary">◀ Left (${g.card[0]})</button>
+        <button id="c-right" class="secondary">Right (${g.card[1]}) ▶</button></div>`);
+      row.querySelector('#c-left').onclick = () => socket.emit('action', { type: 'counter', dir: 'left' });
+      row.querySelector('#c-right').onclick = () => socket.emit('action', { type: 'counter', dir: 'right' });
+    } else {
+      p(`<p class="big">Guess locked! ${teamLabel(g.activeTeam === 'blue' ? 'red' : 'blue')} team is deciding left or right…</p>`);
+    }
+  }
+
+  if (g.phase === 'reveal') {
+    const r = g.result;
+    let html = `<div class="result-pts" style="color:${teamColor(g.activeTeam)}">${teamLabel(g.activeTeam)} +${r.guessPts}</div>`;
+    if (r.guessPts === 4) html += `<p>🎯 BULLSEYE!</p>`;
+    if (r.counterCorrect !== null && r.counterCorrect !== undefined) {
+      const other = g.activeTeam === 'blue' ? 'red' : 'blue';
+      html += `<div class="result-pts" style="color:${teamColor(other)}">${teamLabel(other)} +${r.counterPts} ${r.counterCorrect ? '✅ called it' : '❌ wrong side'}</div>`;
+    }
+    p(html);
+    const b = p(`<button style="width:100%">Next round ▶</button>`);
+    b.querySelector('button').onclick = () => socket.emit('action', { type: 'next' });
+  }
+
+  if (g.phase === 'gameover') {
+    p(`<div class="winner-banner" style="color:${teamColor(g.winner)}">🏆 ${teamLabel(g.winner)} team wins!</div>`);
+    if (S.you === S.hostId) {
+      const b = p(`<button style="width:100%">Rematch</button>`);
+      b.querySelector('button').onclick = () => socket.emit('action', { type: 'rematch' });
+    } else {
+      p(`<p>waiting for the host to start a rematch…</p>`);
+    }
+  }
+}
+
+// ---------- dial rendering ----------
+const CX = 200, CY = 210, R = 185;
+function polar(pos, r) {
+  const th = Math.PI * (1 - pos / 100);
+  return [CX + r * Math.cos(th), CY - r * Math.sin(th)];
+}
+function wedgePath(p1, p2, r) {
+  const [x1, y1] = polar(p1, r);
+  const [x2, y2] = polar(p2, r);
+  return `M ${CX} ${CY} L ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2} Z`;
+}
+function drawDial() {
+  const g = S.game;
+  const svg = $('dial');
+  const showTarget = g.target !== null && g.target !== undefined;
+  let els = '';
+
+  // base semicircle
+  els += `<path d="${wedgePath(0, 100, R)}" fill="#2b3046"/>`;
+
+  // scoring bands (visible to psychic, and to all at reveal)
+  if (showTarget) {
+    const t = g.target;
+    const clamp = v => Math.max(0, Math.min(100, v));
+    const bands = [
+      [t - 12, t - 8, 'var(--band2)', '2'],
+      [t - 8,  t - 4, 'var(--band3)', '3'],
+      [t - 4,  t + 4, 'var(--band4)', '4'],
+      [t + 4,  t + 8, 'var(--band3)', '3'],
+      [t + 8,  t + 12, 'var(--band2)', '2'],
+    ];
+    for (const [a, b, color, label] of bands) {
+      const ca = clamp(a), cb = clamp(b);
+      if (cb <= ca) continue;
+      els += `<path d="${wedgePath(ca, cb, R)}" fill="${color}"/>`;
+      const [lx, ly] = polar((ca + cb) / 2, R * 0.82);
+      els += `<text x="${lx}" y="${ly}" fill="#12141c" font-size="15" font-weight="800" text-anchor="middle">${label}</text>`;
+    }
+  }
+
+  // ticks
+  for (let i = 0; i <= 10; i++) {
+    const [x1, y1] = polar(i * 10, R);
+    const [x2, y2] = polar(i * 10, R - 8);
+    els += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#12141c" stroke-width="2"/>`;
+  }
+
+  // needle
+  const [nx, ny] = polar(localDial, R - 14);
+  els += `<line x1="${CX}" y1="${CY}" x2="${nx}" y2="${ny}" stroke="#fff" stroke-width="4" stroke-linecap="round"/>`;
+  els += `<circle cx="${CX}" cy="${CY}" r="10" fill="#fff"/>`;
+  const [hx, hy] = polar(localDial, R - 14);
+  els += `<circle cx="${hx}" cy="${hy}" r="13" fill="#fff" opacity="0.9"/>`;
+
+  svg.innerHTML = els;
+}
+
+// dial dragging (pointer events)
+const dialSvg = $('dial');
+function posFromEvent(e) {
+  const rect = dialSvg.getBoundingClientRect();
+  const scale = 400 / rect.width;
+  const x = (e.clientX - rect.left) * scale;
+  const y = (e.clientY - rect.top) * scale;
+  const th = Math.atan2(CY - y, x - CX); // 0..π across the top
+  const pos = (1 - Math.max(0, Math.min(Math.PI, th)) / Math.PI) * 100;
+  return Math.max(0, Math.min(100, pos));
+}
+function canDragNow() {
+  if (!S || !S.game) return false;
+  const g = S.game, m = me();
+  return g.phase === 'guess' && m.team === g.activeTeam && g.psychicId !== S.you;
+}
+dialSvg.addEventListener('pointerdown', e => {
+  if (!canDragNow()) return;
+  dragging = true;
+  dialSvg.setPointerCapture(e.pointerId);
+  moveTo(posFromEvent(e));
+});
+dialSvg.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  moveTo(posFromEvent(e));
+});
+dialSvg.addEventListener('pointerup', e => {
+  if (!dragging) return;
+  dragging = false;
+  socket.emit('dial', { pos: localDial }); // send final position
+});
+function moveTo(pos) {
+  localDial = pos;
+  drawDial();
+  const now = Date.now();
+  if (now - lastDialSent > 50) {
+    lastDialSent = now;
+    socket.emit('dial', { pos });
+  }
+}
+</script>
+</body>
+</html>
