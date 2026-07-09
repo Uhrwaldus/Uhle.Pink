@@ -235,7 +235,55 @@ async function testHanabi() {
   Object.values(players).forEach(p => p.disconnect());
 }
 
-const TESTS = { themind: testTheMind, spyfall: testSpyfall, loveletter: testLoveLetter, coup: testCoup, codenames: testCodenames, hanabi: testHanabi };
+async function testWerewolf() {
+  const { names, players, states } = await setup(4, 'werewolf');
+  players[names[0]].emit('start_game');
+  await wait(500);
+  let g = states[names[0]].game;
+  assert(g && g.phase === 'night', 'werewolf did not start');
+  assert(g.startRole, 'no role dealt');
+  // night: whenever someone has a turn, act (prefer skip; troublemaker needs 2 picks)
+  let safety = 0;
+  while (states[names[0]].game.phase === 'night' && safety++ < 100) {
+    for (const n of names) {
+      const mg = states[n].game;
+      if (mg.yourTurn) {
+        if (mg.turnRole === 'troublemaker') {
+          const others = mg.order.filter(id => id !== states[n].you);
+          players[n].emit('action', { type: 'trouble', a: others[0], b: others[1] });
+        } else if (mg.turnRole === 'seer') {
+          players[n].emit('action', { type: 'seer_center' });
+        } else {
+          players[n].emit('action', { type: 'skip_night' });
+        }
+      }
+    }
+    await wait(200);
+  }
+  g = states[names[0]].game;
+  assert(g.phase === 'day', 'night should end in day, got ' + g.phase + ' after ' + safety);
+  players[names[0]].emit('action', { type: 'call_vote' }); // host
+  await wait(200);
+  assert(states[names[0]].game.phase === 'vote', 'vote should start');
+  for (const n of names) {
+    const target = states[n].game.order.find(id => id !== states[n].you);
+    players[n].emit('action', { type: 'vote', pid: target });
+    await wait(100);
+  }
+  await wait(300);
+  g = states[names[0]].game;
+  assert(g.phase === 'reveal', 'should reveal after all votes');
+  assert(g.winner === 'village' || g.winner === 'werewolves', 'winner missing');
+  assert(g.cards && g.center && g.center.length === 3, 'reveal data missing');
+  // sanity: card multiset preserved
+  const all = [...Object.values(g.cards), ...g.center].sort().join(',');
+  const orig = [...Object.values(g.startCards), ...g.center].sort().join(',');
+  assert(all.split('werewolf').length === orig.split('werewolf').length, 'cards corrupted');
+  console.log(`werewolf: full night+vote OK (winner: ${g.winner}${g.deaths.length ? ', deaths: ' + g.deaths.length : ', no deaths'})`);
+  Object.values(players).forEach(p => p.disconnect());
+}
+
+const TESTS = { werewolf: testWerewolf, themind: testTheMind, spyfall: testSpyfall, loveletter: testLoveLetter, coup: testCoup, codenames: testCodenames, hanabi: testHanabi };
 
 async function main() {
   const server = spawn('node', [path.join(__dirname, '..', 'server.js')], {

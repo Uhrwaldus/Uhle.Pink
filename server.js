@@ -14,6 +14,7 @@ const GAMES = {
   coup: require('./games/coup'),
   codenames: require('./games/codenames'),
   hanabi: require('./games/hanabi'),
+  werewolf: require('./games/werewolf'),
 };
 
 const app = express();
@@ -104,6 +105,7 @@ io.on('connection', (socket) => {
       players: new Map([[player.id, player]]),
       state: null,
     };
+    room.broadcast = () => broadcast(room);
     rooms.set(code, room);
     socket.join(code);
     cb({ ok: true, code, playerId: player.id });
