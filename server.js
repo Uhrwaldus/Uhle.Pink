@@ -6,8 +6,15 @@ const http = require('http');
 const https = require('https');
 const { Server } = require('socket.io');
 
-const wavelength = require('./games/wavelength');
-const GAMES = { wavelength };
+const GAMES = {
+  wavelength: require('./games/wavelength'),
+  themind: require('./games/themind'),
+  spyfall: require('./games/spyfall'),
+  loveletter: require('./games/loveletter'),
+  coup: require('./games/coup'),
+  codenames: require('./games/codenames'),
+  hanabi: require('./games/hanabi'),
+};
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
@@ -71,6 +78,7 @@ function broadcast(room) {
       code: room.code,
       you: p.id,
       hostId: room.hostId,
+      gameName: room.gameName,
       mode: room.mode || 'teams',
       coopRounds: room.coopRounds || 10,
       teamName: room.teamName || '',
@@ -131,6 +139,15 @@ io.on('connection', (socket) => {
     return !r.state || r.state.phase === 'lobby' || r.state.phase === 'gameover';
   }
 
+  socket.on('set_game', ({ game }) => {
+    if (!room || !player || player.id !== room.hostId) return;
+    if (!GAMES[game]) return;
+    if (!inLobby(room)) return;
+    room.gameName = game;
+    room.state = null; // back to lobby if a finished game was on screen
+    broadcast(room);
+  });
+
   socket.on('set_mode', ({ mode }) => {
     if (!room || !player || player.id !== room.hostId) return;
     if (mode !== 'teams' && mode !== 'coop') return;
@@ -181,7 +198,7 @@ io.on('connection', (socket) => {
       const changed = game.handleAction(room, player, msg || {});
       if (changed) {
         const s = room.state;
-        if (s && s.phase === 'gameover' && s.mode === 'coop' && !s.recorded) {
+        if (room.gameName === 'wavelength' && s && s.phase === 'gameover' && s.mode === 'coop' && !s.recorded) {
           s.recorded = true;
           s.lbRank = recordCoopScore(room);
         }

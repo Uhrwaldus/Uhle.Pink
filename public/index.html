@@ -3,19 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Wavelength — uhle.pink</title>
+<title>uhle.pink — game night</title>
 <style>
   :root {
-    --bg: #12141c;
-    --panel: #1c1f2b;
-    --panel2: #252938;
-    --text: #eef0f6;
-    --muted: #9aa0b4;
-    --blue: #4f7cff;
-    --red: #ff5a5f;
-    --band4: #ffd166;
-    --band3: #ff8c5a;
-    --band2: #3ecfb2;
+    --bg: #12141c; --panel: #1c1f2b; --panel2: #252938;
+    --text: #eef0f6; --muted: #9aa0b4;
+    --blue: #4f7cff; --red: #ff5a5f;
+    --band4: #ffd166; --band3: #ff8c5a; --band2: #3ecfb2;
     --radius: 14px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -23,25 +17,19 @@
     background: radial-gradient(1200px 800px at 50% -200px, #232840, var(--bg));
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    min-height: 100vh;
-    display: flex; flex-direction: column; align-items: center;
-    padding: 16px;
-    touch-action: manipulation;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 16px; touch-action: manipulation;
   }
   h1 { font-size: 1.6rem; margin: 12px 0 2px; letter-spacing: 1px; }
   .tagline { color: var(--muted); font-size: .85rem; margin-bottom: 18px; }
-  .screen { display: none; width: 100%; max-width: 560px; flex-direction: column; align-items: center; }
+  .screen { display: none; width: 100%; max-width: 640px; flex-direction: column; align-items: center; }
   .screen.active { display: flex; }
-  .card {
-    background: var(--panel); border-radius: var(--radius);
-    padding: 20px; width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,.35);
-  }
-  input[type=text] {
+  .card { background: var(--panel); border-radius: var(--radius); padding: 20px; width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+  input[type=text], input[type=number], select {
     width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #3a4057;
-    background: var(--panel2); color: var(--text); font-size: 1rem; margin-bottom: 10px;
-    outline: none;
+    background: var(--panel2); color: var(--text); font-size: 1rem; margin-bottom: 10px; outline: none;
   }
-  input[type=text]:focus { border-color: var(--blue); }
+  input:focus, select:focus { border-color: var(--blue); }
   button {
     padding: 12px 18px; border-radius: 10px; border: none; cursor: pointer;
     font-size: 1rem; font-weight: 600; color: #fff; background: var(--blue);
@@ -55,58 +43,97 @@
   .row { display: flex; gap: 10px; width: 100%; }
   .row > * { flex: 1; }
   .divider { color: var(--muted); text-align: center; margin: 14px 0; font-size: .8rem; }
-
-  /* Lobby */
   .room-code { font-size: 2.4rem; font-weight: 800; letter-spacing: .35em; text-align: center; margin: 6px 0 2px; }
   .room-hint { color: var(--muted); text-align: center; font-size: .8rem; margin-bottom: 16px; }
+
+  /* dashboard */
+  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; width: 100%; margin-bottom: 14px; }
+  .game-card {
+    background: var(--panel2); border-radius: 12px; padding: 12px; cursor: pointer;
+    border: 2px solid transparent; text-align: center; transition: border-color .15s;
+  }
+  .game-card:hover { border-color: #3a4057; }
+  .game-card.selected { border-color: var(--band2); }
+  .game-card.locked { opacity: .55; cursor: default; }
+  .game-card .emoji { font-size: 1.8rem; }
+  .game-card .gname { font-weight: 700; margin: 4px 0 2px; }
+  .game-card .gdesc { font-size: .72rem; color: var(--muted); }
+
   .teams { display: flex; gap: 12px; width: 100%; margin-bottom: 14px; }
   .team-col { flex: 1; background: var(--panel2); border-radius: 12px; padding: 12px; border: 2px solid transparent; }
   .team-col.blue { border-color: rgba(79,124,255,.5); }
   .team-col.red { border-color: rgba(255,90,95,.5); }
   .team-col h3 { font-size: .9rem; margin-bottom: 8px; }
   .team-col.blue h3 { color: var(--blue); } .team-col.red h3 { color: var(--red); }
-  .team-col ul { list-style: none; min-height: 60px; }
-  .team-col li { padding: 4px 0; font-size: .95rem; }
+  .team-col ul { list-style: none; min-height: 48px; }
+  .team-col li, #coop-players li { padding: 4px 0; font-size: .95rem; }
   .team-col li.offline { opacity: .4; }
   .team-col button { width: 100%; margin-top: 8px; padding: 8px; font-size: .85rem; }
   .unassigned { color: var(--muted); font-size: .85rem; margin-bottom: 12px; text-align: center; }
 
-  /* Game */
+  .phase-box { width: 100%; text-align: center; margin-top: 8px; }
+  .phase-box p { color: var(--muted); margin-bottom: 10px; font-size: .95rem; }
+  .phase-box .big { color: var(--text); font-size: 1.05rem; }
+  .result-pts { font-size: 1.3rem; font-weight: 800; margin: 6px 0; }
+  .winner-banner { font-size: 1.7rem; font-weight: 800; margin: 16px 0; text-align: center; }
+  .log { background: var(--panel2); border-radius: 10px; padding: 10px 12px; font-size: .8rem; color: var(--muted); width: 100%; margin-top: 10px; text-align: left; }
+  .log div { padding: 1px 0; }
+  .pill { display: inline-block; background: var(--panel2); border-radius: 999px; padding: 4px 12px; margin: 2px; font-size: .85rem; }
+  .hand-card {
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    min-width: 56px; padding: 10px 8px; margin: 4px; border-radius: 10px; border: 2px solid #3a4057;
+    background: var(--panel2); cursor: pointer; font-weight: 700; font-size: 1.1rem; color: var(--text);
+  }
+  .hand-card:hover { border-color: var(--band2); }
+  .hand-card small { font-size: .65rem; color: var(--muted); font-weight: 400; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #2e3348; padding: 10px 20px; border-radius: 10px; font-size: .9rem;
+    opacity: 0; transition: opacity .3s; pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,.4); z-index: 10;
+  }
+  .toast.show { opacity: 1; }
+
+  /* wavelength */
   .scorebar { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; }
   .score { font-size: 1.5rem; font-weight: 800; padding: 4px 14px; border-radius: 10px; }
   .score.blue { color: var(--blue); background: rgba(79,124,255,.12); }
   .score.red  { color: var(--red);  background: rgba(255,90,95,.12); }
   .score.active-team { outline: 2px solid currentColor; }
   .round-info { color: var(--muted); font-size: .8rem; text-align: center; }
-  .spectrum {
-    display: flex; justify-content: space-between; width: 100%;
-    font-weight: 700; font-size: 1.05rem; margin: 4px 0 0;
-  }
+  .spectrum { display: flex; justify-content: space-between; width: 100%; font-weight: 700; font-size: 1.05rem; }
   .spectrum .left { color: var(--band2); } .spectrum .right { color: var(--band3); }
-  .dial-wrap { width: 100%; position: relative; }
   svg { width: 100%; display: block; user-select: none; }
-  .clue-banner {
-    background: var(--panel2); border-radius: 12px; padding: 12px 16px; width: 100%;
-    text-align: center; margin: 10px 0; font-size: 1.15rem; font-weight: 700;
-  }
+  .clue-banner { background: var(--panel2); border-radius: 12px; padding: 12px 16px; width: 100%; text-align: center; margin: 10px 0; font-size: 1.15rem; font-weight: 700; }
   .clue-banner .lbl { display: block; color: var(--muted); font-size: .7rem; font-weight: 400; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 2px; }
-  .phase-box { width: 100%; text-align: center; margin-top: 8px; }
-  .phase-box p { color: var(--muted); margin-bottom: 10px; font-size: .95rem; }
-  .phase-box .big { color: var(--text); font-size: 1.05rem; }
-  .result-pts { font-size: 1.3rem; font-weight: 800; margin: 6px 0; }
-  .toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: #2e3348; padding: 10px 20px; border-radius: 10px; font-size: .9rem;
-    opacity: 0; transition: opacity .3s; pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,.4);
-  }
-  .toast.show { opacity: 1; }
   .psychic-note { font-size: .8rem; color: var(--band4); margin-top: 6px; }
-  .winner-banner { font-size: 2rem; font-weight: 800; margin: 20px 0; text-align: center; }
+
+  /* codenames */
+  .cn-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%; margin: 10px 0; }
+  .cn-tile {
+    padding: 10px 2px; border-radius: 8px; font-size: .68rem; font-weight: 700; text-align: center;
+    background: #3a4057; color: var(--text); border: none; cursor: pointer; text-transform: uppercase;
+  }
+  .cn-tile.k-blue { outline: 2px solid var(--blue); }
+  .cn-tile.k-red { outline: 2px solid var(--red); }
+  .cn-tile.k-assassin { outline: 2px solid #000; background: #23242a; }
+  .cn-tile.r-blue { background: var(--blue); }
+  .cn-tile.r-red { background: var(--red); }
+  .cn-tile.r-neutral { background: #8a8f a3; background: #7a7f93; color: #22232b; }
+  .cn-tile.r-assassin { background: #000; }
+
+  /* hanabi */
+  .hb-card {
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 44px; height: 60px; margin: 3px; border-radius: 8px; font-weight: 800; font-size: 1.2rem;
+    background: var(--panel2); border: 2px solid #3a4057; color: #fff; cursor: default;
+  }
+  .hb-red { background: #a33; } .hb-yellow { background: #a90; } .hb-green { background: #2a7; }
+  .hb-blue { background: #36c; } .hb-white { background: #ccc; color: #222; }
 </style>
 </head>
 <body>
-<h1>🌈 WAVELENGTH</h1>
-<div class="tagline">read your friends' minds</div>
+<h1 id="site-title">🎲 UHLE.PINK</h1>
+<div class="tagline">mini board games for game night</div>
 
 <!-- HOME -->
 <div class="screen active" id="scr-home">
@@ -121,7 +148,7 @@
   </div>
 </div>
 
-<!-- LOBBY -->
+<!-- LOBBY / DASHBOARD -->
 <div class="screen" id="scr-lobby">
   <div class="card">
     <div class="room-code" id="lobby-code"></div>
@@ -132,101 +159,70 @@
       <button id="share-copy" class="secondary" style="display:block;width:100%;margin-top:8px;padding:8px;font-size:.85rem">Copy link</button>
       <div id="share-pass" style="font-size:.75rem;color:var(--band4);margin-top:8px"></div>
     </div>
-    <div class="row" id="mode-row" style="margin-bottom:12px">
-      <button id="mode-teams" class="secondary">⚔️ Teams</button>
-      <button id="mode-coop" class="secondary">🤝 Co-op</button>
-    </div>
-    <div id="coop-options" style="display:none;margin-bottom:12px">
-      <div class="row" id="rounds-row" style="margin-bottom:10px">
-        <button data-rounds="10" class="secondary">10 turns</button>
-        <button data-rounds="20" class="secondary">20 turns</button>
-        <button data-rounds="30" class="secondary">30 turns</button>
-      </div>
-      <input type="text" id="team-name-input" placeholder="Team name (for the leaderboard)" maxlength="24">
-      <div id="coop-list" style="background:var(--panel2);border-radius:12px;padding:12px">
-        <h3 style="font-size:.9rem;color:var(--band2);margin-bottom:8px">PLAYERS</h3>
-        <ul id="coop-players" style="list-style:none"></ul>
-      </div>
-    </div>
-    <div class="teams">
+
+    <div class="game-grid" id="game-grid"></div>
+    <div id="game-options"></div>
+
+    <div class="teams" id="teams-box" style="display:none">
       <div class="team-col blue">
-        <h3>BLUE</h3>
-        <ul id="team-blue"></ul>
+        <h3>BLUE</h3><ul id="team-blue"></ul>
         <button data-team="blue">Join Blue</button>
       </div>
       <div class="team-col red">
-        <h3>RED</h3>
-        <ul id="team-red"></ul>
+        <h3>RED</h3><ul id="team-red"></ul>
         <button data-team="red" class="red">Join Red</button>
       </div>
     </div>
     <div class="unassigned" id="unassigned"></div>
+    <div id="player-list-box" style="display:none;background:var(--panel2);border-radius:12px;padding:12px;margin-bottom:12px">
+      <h3 style="font-size:.9rem;color:var(--band2);margin-bottom:6px">PLAYERS</h3>
+      <ul id="coop-players" style="list-style:none"></ul>
+    </div>
     <button id="btn-start" style="width:100%">Start game</button>
-    <p style="color:var(--muted);font-size:.75rem;text-align:center;margin-top:8px">
-      teams: 2+ per team · co-op: 2+ players · only the host can start
-    </p>
+    <p id="start-hint" style="color:var(--muted);font-size:.75rem;text-align:center;margin-top:8px"></p>
   </div>
 </div>
 
 <!-- GAME -->
 <div class="screen" id="scr-game">
-  <div class="scorebar">
-    <div class="score blue" id="score-blue">0</div>
-    <div class="round-info" id="round-info"></div>
-    <div class="score red" id="score-red">0</div>
-  </div>
-  <div class="card">
-    <div class="spectrum">
-      <span class="left" id="card-left"></span>
-      <span class="right" id="card-right"></span>
-    </div>
-    <div class="dial-wrap">
-      <svg id="dial" viewBox="0 0 400 225" xmlns="http://www.w3.org/2000/svg"></svg>
-    </div>
-    <div class="clue-banner" id="clue-banner" style="display:none">
-      <span class="lbl">the clue</span><span id="clue-text"></span>
-    </div>
-    <div class="phase-box" id="phase-box"></div>
-  </div>
+  <div class="card" id="game-root"></div>
+  <button id="btn-lobby" class="secondary" style="margin-top:10px;display:none;padding:8px 16px;font-size:.85rem">⬅ Back to lobby</button>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-// If socket.io didn't load, the page was opened without the server (e.g. by
-// double-clicking index.html). Explain instead of silently doing nothing.
 if (typeof io === 'undefined') {
   document.getElementById('scr-home').insertAdjacentHTML('afterbegin',
     `<div class="card" style="margin-bottom:12px;border:1px solid var(--red)">
        <b style="color:var(--red)">⚠️ Not connected to the game server</b>
        <p style="color:var(--muted);font-size:.9rem;margin-top:8px">
-         This page can't work on its own — the server must be running.<br><br>
-         1. Open a terminal in the <b>mini-games</b> folder<br>
-         2. Run <code>npm install</code> (first time only), then <code>npm start</code><br>
-         3. Open <b>http://localhost:3000</b> in your browser<br><br>
+         Run <code>npm start</code> in the mini-games folder, then open <b>http://localhost:3000</b>.
          (If your address bar starts with <code>file://</code>, that's the problem.)
        </p></div>`);
-  throw new Error('socket.io not loaded — server not running');
+  throw new Error('socket.io not loaded');
 }
 const socket = io();
-
-// Show connection problems instead of failing silently.
 let connected = false;
 socket.on('connect', () => { connected = true; });
 socket.on('disconnect', () => { connected = false; });
-socket.on('connect_error', () => {
-  connected = false;
-  toast("Can't reach the game server — is it still running?");
-});
+socket.on('connect_error', () => { connected = false; toast("Can't reach the game server"); });
+
 const $ = id => document.getElementById(id);
+let S = null;
+const GameUI = {}; // per-game renderers register here
 
-let S = null;          // last full state from server
-let dragging = false;
-let localDial = 50;    // needle position we render
-let lastDialSent = 0;
+const GAME_INFO = {
+  wavelength: { emoji: '🌈', name: 'Wavelength', desc: 'guess the vibe · 2+ / 4+', },
+  themind:    { emoji: '🧠', name: 'The Mind', desc: 'silent co-op · 2-4' },
+  hanabi:     { emoji: '🎆', name: 'Hanabi', desc: 'fireworks co-op · 2-5' },
+  spyfall:    { emoji: '🕵️', name: 'Spyfall', desc: 'find the spy · 3+' },
+  loveletter: { emoji: '💌', name: 'Love Letter', desc: 'deduction · 2-4' },
+  coup:       { emoji: '👑', name: 'Coup', desc: 'bluffing · 3-6' },
+  codenames:  { emoji: '🗝️', name: 'Codenames', desc: 'word teams · 4+' },
+};
 
-// ---------- helpers ----------
 function show(screen) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   $(screen).classList.add('active');
@@ -240,16 +236,16 @@ function toast(msg) {
 }
 function me() { return S && S.players.find(p => p.id === S.you); }
 function playerName(id) { const p = S && S.players.find(p => p.id === id); return p ? p.name : '?'; }
-function teamColor(t) { return t === 'blue' ? 'var(--blue)' : 'var(--red)'; }
-function teamLabel(t) { return t === 'blue' ? 'Blue' : 'Red'; }
+function esc(x) { return String(x).replace(/</g, '&lt;'); }
+function act(type, extra) { socket.emit('action', Object.assign({ type }, extra || {})); }
+function isHost() { return S && S.you === S.hostId; }
 
 // ---------- join / create ----------
 function saveSession(code, name) { sessionStorage.setItem('wl', JSON.stringify({ code, name })); }
-
 $('btn-create').onclick = () => {
   const name = $('name-input').value.trim();
   if (!name) return toast('Enter your name first');
-  if (!connected) return toast("Not connected to the server — is it running?");
+  if (!connected) return toast('Not connected to the server');
   socket.emit('create_room', { name }, res => {
     if (res.error) return toast(res.error);
     saveSession(res.code, name);
@@ -260,14 +256,12 @@ $('btn-join').onclick = () => {
   const code = $('code-input').value.trim().toUpperCase();
   if (!name) return toast('Enter your name first');
   if (!code) return toast('Enter a room code');
-  if (!connected) return toast("Not connected to the server — is it running?");
+  if (!connected) return toast('Not connected to the server');
   socket.emit('join_room', { code, name }, res => {
     if (res.error) return toast(res.error);
     saveSession(code, name);
   });
 };
-
-// Auto-rejoin after refresh / reconnect.
 socket.on('connect', () => {
   const saved = sessionStorage.getItem('wl');
   if (saved && !S) {
@@ -275,44 +269,26 @@ socket.on('connect', () => {
     if (code && name) socket.emit('join_room', { code, name }, () => {});
   }
 });
-
 socket.on('toast', toast);
 
-// ---------- state ----------
+// ---------- state routing ----------
 socket.on('state', state => {
+  const prevGame = S && S.gameName;
   S = state;
-  if (!S.game || S.game.phase === 'lobby') { renderLobby(); return; }
+  if (!S.game) { renderLobby(); return; }
   renderGame();
 });
-
 socket.on('dial', ({ pos }) => {
-  if (!dragging) {
-    localDial = pos;
-    if (S && S.game) drawDial();
-  }
+  if (GameUI.wavelength && GameUI.wavelength.onDial) GameUI.wavelength.onDial(pos);
 });
 
-// ---------- lobby ----------
-document.querySelectorAll('[data-team]').forEach(btn => {
-  btn.onclick = () => socket.emit('set_team', { team: btn.dataset.team });
-});
-$('btn-start').onclick = () => socket.emit('start_game');
-$('mode-teams').onclick = () => socket.emit('set_mode', { mode: 'teams' });
-$('mode-coop').onclick = () => socket.emit('set_mode', { mode: 'coop' });
-document.querySelectorAll('[data-rounds]').forEach(btn => {
-  btn.onclick = () => socket.emit('set_rounds', { rounds: parseInt(btn.dataset.rounds, 10) });
-});
-$('team-name-input').addEventListener('change', () =>
-  socket.emit('set_team_name', { name: $('team-name-input').value }));
-
-// Fetch the public share link (if the server managed to open a tunnel).
+// ---------- share link ----------
 let shareFetched = false;
 async function loadShare() {
   if (shareFetched) return;
   shareFetched = true;
   let info = null;
   try {
-    // The tunnel can take a few seconds to open — retry a bit.
     for (let i = 0; i < 6; i++) {
       info = await (await fetch('/share')).json();
       if (info && info.url) break;
@@ -322,52 +298,72 @@ async function loadShare() {
     $('share-box').style.display = '';
     $('share-url').textContent = info.url;
     $('share-url').href = info.url;
-    if (info.password) {
-      $('share-pass').textContent = `if the link asks for a "tunnel password", it's: ${info.password}`;
-    }
+    if (info.password) $('share-pass').textContent = `if the link asks for a "tunnel password", it's: ${info.password}`;
     $('share-copy').onclick = () => {
       navigator.clipboard.writeText(info.url + (info.password ? ` (password: ${info.password})` : ''))
-        .then(() => toast('Link copied!'))
-        .catch(() => toast('Copy failed — select the link manually'));
+        .then(() => toast('Link copied!')).catch(() => toast('Copy failed'));
     };
   } catch {}
+}
+
+// ---------- lobby / dashboard ----------
+document.querySelectorAll('[data-team]').forEach(btn => {
+  btn.onclick = () => socket.emit('set_team', { team: btn.dataset.team });
+});
+$('btn-start').onclick = () => socket.emit('start_game');
+$('btn-lobby').onclick = () => socket.emit('set_game', { game: S.gameName }); // resets state -> lobby
+
+function usesTeams() {
+  return S.gameName === 'codenames' || (S.gameName === 'wavelength' && S.mode !== 'coop');
 }
 
 function renderLobby() {
   show('scr-lobby');
   loadShare();
   $('lobby-code').textContent = S.code;
-  const isHost = S.you === S.hostId;
-  const coop = S.mode === 'coop';
+  const host = isHost();
 
-  // mode buttons: highlight the active one; only the host can switch
-  $('mode-teams').style.outline = !coop ? '2px solid var(--blue)' : 'none';
-  $('mode-coop').style.outline = coop ? '2px solid var(--band2)' : 'none';
-  $('mode-teams').disabled = $('mode-coop').disabled = !isHost;
+  // game cards
+  const grid = $('game-grid');
+  grid.innerHTML = '';
+  for (const [key, info] of Object.entries(GAME_INFO)) {
+    const div = document.createElement('div');
+    div.className = 'game-card' + (S.gameName === key ? ' selected' : '') + (host ? '' : ' locked');
+    div.innerHTML = `<div class="emoji">${info.emoji}</div><div class="gname">${info.name}</div><div class="gdesc">${info.desc}</div>`;
+    if (host) div.onclick = () => socket.emit('set_game', { game: key });
+    grid.appendChild(div);
+  }
 
-  // co-op options
-  $('coop-options').style.display = coop ? '' : 'none';
-  document.querySelector('.teams').style.display = coop ? 'none' : '';
-  $('unassigned').style.display = coop ? 'none' : '';
-  document.querySelectorAll('[data-rounds]').forEach(btn => {
-    btn.style.outline = parseInt(btn.dataset.rounds, 10) === S.coopRounds ? '2px solid var(--band2)' : 'none';
-    btn.disabled = !isHost;
-  });
-  if (document.activeElement !== $('team-name-input')) $('team-name-input').value = S.teamName || '';
-  $('team-name-input').disabled = !isHost;
-  $('team-name-input').placeholder = isHost ? 'Team name (for the leaderboard)' : (S.teamName || 'Team name (host sets it)');
+  // per-game options
+  const opts = $('game-options');
+  opts.innerHTML = '';
+  if (S.gameName === 'wavelength') {
+    const coop = S.mode === 'coop';
+    opts.innerHTML = `
+      <div class="row" style="margin-bottom:10px">
+        <button id="mode-teams" class="secondary" ${host ? '' : 'disabled'} style="${!coop ? 'outline:2px solid var(--blue)' : ''}">⚔️ Teams</button>
+        <button id="mode-coop" class="secondary" ${host ? '' : 'disabled'} style="${coop ? 'outline:2px solid var(--band2)' : ''}">🤝 Co-op</button>
+      </div>
+      ${coop ? `
+      <div class="row" style="margin-bottom:10px">
+        ${[10, 20, 30].map(r => `<button data-rounds="${r}" class="secondary" ${host ? '' : 'disabled'} style="${S.coopRounds === r ? 'outline:2px solid var(--band2)' : ''}">${r} turns</button>`).join('')}
+      </div>
+      <input type="text" id="team-name-input" placeholder="Team name (for the leaderboard)" maxlength="24" ${host ? '' : 'disabled'} value="${esc(S.teamName || '')}">` : ''}`;
+    if (host) {
+      opts.querySelector('#mode-teams').onclick = () => socket.emit('set_mode', { mode: 'teams' });
+      opts.querySelector('#mode-coop').onclick = () => socket.emit('set_mode', { mode: 'coop' });
+      opts.querySelectorAll('[data-rounds]').forEach(b => b.onclick = () => socket.emit('set_rounds', { rounds: +b.dataset.rounds }));
+      const tn = opts.querySelector('#team-name-input');
+      if (tn) tn.addEventListener('change', () => socket.emit('set_team_name', { name: tn.value }));
+    }
+  }
 
-  if (coop) {
-    const ul = $('coop-players');
-    ul.innerHTML = '';
-    S.players.forEach(p => {
-      const li = document.createElement('li');
-      li.style.padding = '4px 0';
-      li.textContent = p.name + (p.id === S.you ? ' (you)' : '') + (p.id === S.hostId ? ' 👑' : '');
-      if (!p.connected) li.style.opacity = '.4';
-      ul.appendChild(li);
-    });
-  } else {
+  // teams vs flat player list
+  const teams = usesTeams();
+  $('teams-box').style.display = teams ? '' : 'none';
+  $('unassigned').style.display = teams ? '' : 'none';
+  $('player-list-box').style.display = teams ? 'none' : '';
+  if (teams) {
     for (const team of ['blue', 'red']) {
       const ul = $('team-' + team);
       ul.innerHTML = '';
@@ -380,246 +376,42 @@ function renderLobby() {
     }
     const un = S.players.filter(p => !p.team);
     $('unassigned').textContent = un.length ? 'Picking a team: ' + un.map(p => p.name).join(', ') : '';
+  } else {
+    const ul = $('coop-players');
+    ul.innerHTML = '';
+    S.players.forEach(p => {
+      const li = document.createElement('li');
+      li.textContent = p.name + (p.id === S.you ? ' (you)' : '') + (p.id === S.hostId ? ' 👑' : '');
+      if (!p.connected) li.style.opacity = '.4';
+      ul.appendChild(li);
+    });
   }
-  $('btn-start').style.display = isHost ? '' : 'none';
+  $('btn-start').style.display = isHost() ? '' : 'none';
+  $('start-hint').textContent = isHost() ? `selected: ${GAME_INFO[S.gameName].name} — only you (host) can start` : `${playerName(S.hostId)} picks the game and starts`;
 }
 
-// ---------- game ----------
+// ---------- game routing ----------
 function renderGame() {
   show('scr-game');
-  const g = S.game;
-  const m = me();
-  const isPsychic = g.psychicId === S.you;
-  const onActive = g.mode === 'coop' || m.team === g.activeTeam;
-  const canDrag = g.phase === 'guess' && onActive && !isPsychic;
-
-  if (!dragging) localDial = g.dialPos;
-
-  if (g.mode === 'coop') {
-    $('score-blue').textContent = g.scores.total + ' pts';
-    $('score-blue').classList.remove('active-team');
-    $('score-red').style.display = 'none';
-    $('round-info').innerHTML = `${g.teamName ? g.teamName + ' · ' : ''}round ${g.round}/${g.totalRounds}`;
-  } else {
-    $('score-red').style.display = '';
-    $('score-blue').textContent = g.scores.blue;
-    $('score-red').textContent = g.scores.red;
-    $('score-blue').classList.toggle('active-team', g.activeTeam === 'blue');
-    $('score-red').classList.toggle('active-team', g.activeTeam === 'red');
-    $('round-info').innerHTML = `round ${g.round} · <span style="color:${teamColor(g.activeTeam)}">${teamLabel(g.activeTeam)}</span> guessing · first to ${g.winScore}`;
-  }
-  $('card-left').textContent = '◀ ' + g.card[0];
-  $('card-right').textContent = g.card[1] + ' ▶';
-
-  $('clue-banner').style.display = g.clue ? '' : 'none';
-  $('clue-text').textContent = g.clue || '';
-
-  drawDial();
-  renderPhaseBox(g, m, isPsychic, onActive, canDrag);
+  const ui = GameUI[S.gameName];
+  const root = $('game-root');
+  const over = ['gameover', 'win', 'reveal'].includes(S.game.phase);
+  $('btn-lobby').style.display = (over && isHost()) ? '' : 'none';
+  if (!ui) { root.innerHTML = '<p>Unknown game…</p>'; return; }
+  ui.render(root, S);
 }
-
-function renderPhaseBox(g, m, isPsychic, onActive, canDrag) {
-  const box = $('phase-box');
-  box.innerHTML = '';
-  const p = html => { const d = document.createElement('div'); d.innerHTML = html; box.appendChild(d); return d; };
-
-  if (g.phase === 'clue') {
-    if (isPsychic) {
-      p(`<p class="big">You're the psychic! 🧠 The target is shown on the dial.</p>
-         <p>Give a clue that sits at that spot between <b>${g.card[0]}</b> and <b>${g.card[1]}</b>.</p>`);
-      const rr = p(`<div class="row" style="margin-bottom:10px">
-        <button id="rr-target" class="secondary" ${g.rerolls.target ? 'disabled' : ''}>🎲 New target ${g.rerolls.target ? '(used)' : '(1×)'}</button>
-        <button id="rr-card" class="secondary" ${g.rerolls.card ? 'disabled' : ''}>🃏 New card ${g.rerolls.card ? '(used)' : '(1×)'}</button></div>`);
-      rr.querySelector('#rr-target').onclick = () => socket.emit('action', { type: 'reroll_target' });
-      rr.querySelector('#rr-card').onclick = () => socket.emit('action', { type: 'reroll_card' });
-      const wrap = p(`<input type="text" id="clue-input" placeholder="Your clue…" maxlength="60">
-                      <button id="btn-clue" style="width:100%">Submit clue</button>`);
-      wrap.querySelector('#btn-clue').onclick = () => {
-        const clue = wrap.querySelector('#clue-input').value.trim();
-        if (!clue) return toast('Write a clue first');
-        socket.emit('action', { type: 'clue', clue });
-      };
-    } else {
-      p(`<p class="big">🤫 <b>${playerName(g.psychicId)}</b> is looking at the target and thinking of a clue…</p>`);
-    }
-  }
-
-  if (g.phase === 'guess') {
-    if (canDrag) {
-      p(`<p class="big">Drag the dial to where you think <b>“${g.clue}”</b> lands. Talk it out with your team!</p>`);
-      const b = p(`<button style="width:100%">🔒 Lock it in</button>`);
-      b.querySelector('button').onclick = () => {
-        socket.emit('dial', { pos: localDial });
-        socket.emit('action', { type: 'lock' });
-      };
-    } else if (isPsychic) {
-      p(`<p class="big">Your team is guessing… you can see the target, so 🤐 no hints!</p><p class="psychic-note">not even facial expressions 👀</p>`);
-    } else {
-      p(`<p class="big">${teamLabel(g.activeTeam)} team is guessing. Get ready to counter!</p>`);
-    }
-  }
-
-  if (g.phase === 'counter') {
-    if (g.counterTie) p(`<p class="big" style="color:var(--band4)">⚖️ It's a 50/50 tie — talk it over and vote again!</p>`);
-    if (m.team !== g.activeTeam) {
-      if (g.youVoted) {
-        p(`<p class="big">Vote cast ✔ — waiting for teammates (${g.votesIn}/${g.votesNeeded} votes in)</p>`);
-      } else {
-        p(`<p class="big">Their guess is locked. Is the true target <b>LEFT</b> or <b>RIGHT</b> of their needle? Everyone votes — majority wins (+1 point). ${g.votesIn}/${g.votesNeeded} votes in.</p>`);
-        const row = p(`<div class="row">
-          <button id="c-left" class="secondary">◀ Left (${g.card[0]})</button>
-          <button id="c-right" class="secondary">Right (${g.card[1]}) ▶</button></div>`);
-        row.querySelector('#c-left').onclick = () => socket.emit('action', { type: 'counter', dir: 'left' });
-        row.querySelector('#c-right').onclick = () => socket.emit('action', { type: 'counter', dir: 'right' });
-      }
-    } else {
-      p(`<p class="big">Guess locked! ${teamLabel(g.activeTeam === 'blue' ? 'red' : 'blue')} team is voting left or right… (${g.votesIn}/${g.votesNeeded})</p>`);
-    }
-  }
-
-  if (g.phase === 'reveal') {
-    const r = g.result;
-    let html;
-    if (g.mode === 'coop') {
-      html = `<div class="result-pts" style="color:var(--band2)">+${r.guessPts} ${r.guessPts === 4 ? '🎯 BULLSEYE!' : r.guessPts > 0 ? '✨' : '💨'}</div>
-              <p>team total: <b>${g.scores.total}</b> after ${g.round}/${g.totalRounds} rounds</p>`;
-    } else {
-      html = `<div class="result-pts" style="color:${teamColor(g.activeTeam)}">${teamLabel(g.activeTeam)} +${r.guessPts}</div>`;
-      if (r.guessPts === 4) html += `<p>🎯 BULLSEYE!</p>`;
-      if (r.counterCorrect !== null && r.counterCorrect !== undefined) {
-        const other = g.activeTeam === 'blue' ? 'red' : 'blue';
-        html += `<div class="result-pts" style="color:${teamColor(other)}">${teamLabel(other)} +${r.counterPts} ${r.counterCorrect ? '✅ called it' : '❌ wrong side'}</div>`;
-      }
-    }
-    p(html);
-    const b = p(`<button style="width:100%">Next round ▶</button>`);
-    b.querySelector('button').onclick = () => socket.emit('action', { type: 'next' });
-  }
-
-  if (g.phase === 'gameover') {
-    if (g.mode === 'coop') {
-      const max = g.totalRounds * 4;
-      const pct = g.scores.total / max;
-      const rank = pct >= .75 ? '🔮 TELEPATHIC' : pct >= .55 ? '🌊 On the same wavelength' : pct >= .35 ? '📡 Getting there' : '📺 Static noise';
-      p(`<div class="winner-banner" style="color:var(--band2)">${g.scores.total} / ${max}</div>
-         <p class="big">${rank}${g.lbRank ? ` · #${g.lbRank} on the leaderboard!` : ''}</p>`);
-      const lb = p(`<div id="lb-box" style="background:var(--panel2);border-radius:12px;padding:12px;margin:10px 0;text-align:left;font-size:.9rem">loading leaderboard…</div>`);
-      fetch('/leaderboard?rounds=' + g.totalRounds).then(r => r.json()).then(d => {
-        const rows = d.top.map((e, i) =>
-          `<div style="display:flex;justify-content:space-between;padding:3px 0;${g.lbRank === i + 1 ? 'color:var(--band4);font-weight:700' : ''}">
-             <span>${i + 1}. ${e.name.replace(/</g, '&lt;')}</span><span>${e.score}</span></div>`).join('');
-        lb.querySelector('#lb-box').innerHTML = `<b>🏆 Best teams (${d.rounds} turns)</b><div style="margin-top:6px">${rows || 'no scores yet'}</div>`;
-      }).catch(() => { lb.querySelector('#lb-box').style.display = 'none'; });
-    } else {
-      p(`<div class="winner-banner" style="color:${teamColor(g.winner)}">🏆 ${teamLabel(g.winner)} team wins!</div>`);
-    }
-    if (S.you === S.hostId) {
-      const b = p(`<button style="width:100%">Rematch</button>`);
-      b.querySelector('button').onclick = () => socket.emit('action', { type: 'rematch' });
-    } else {
-      p(`<p>waiting for the host to start a rematch…</p>`);
-    }
-  }
-}
-
-// ---------- dial rendering ----------
-const CX = 200, CY = 210, R = 185;
-function polar(pos, r) {
-  const th = Math.PI * (1 - pos / 100);
-  return [CX + r * Math.cos(th), CY - r * Math.sin(th)];
-}
-function wedgePath(p1, p2, r) {
-  const [x1, y1] = polar(p1, r);
-  const [x2, y2] = polar(p2, r);
-  return `M ${CX} ${CY} L ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2} Z`;
-}
-function drawDial() {
-  const g = S.game;
-  const svg = $('dial');
-  const showTarget = g.target !== null && g.target !== undefined;
-  let els = '';
-
-  // base semicircle
-  els += `<path d="${wedgePath(0, 100, R)}" fill="#2b3046"/>`;
-
-  // scoring bands (visible to psychic, and to all at reveal)
-  if (showTarget) {
-    const t = g.target;
-    const clamp = v => Math.max(0, Math.min(100, v));
-    const bands = [
-      [t - 12, t - 8, 'var(--band2)', '2'],
-      [t - 8,  t - 4, 'var(--band3)', '3'],
-      [t - 4,  t + 4, 'var(--band4)', '4'],
-      [t + 4,  t + 8, 'var(--band3)', '3'],
-      [t + 8,  t + 12, 'var(--band2)', '2'],
-    ];
-    for (const [a, b, color, label] of bands) {
-      const ca = clamp(a), cb = clamp(b);
-      if (cb <= ca) continue;
-      els += `<path d="${wedgePath(ca, cb, R)}" fill="${color}"/>`;
-      const [lx, ly] = polar((ca + cb) / 2, R * 0.82);
-      els += `<text x="${lx}" y="${ly}" fill="#12141c" font-size="15" font-weight="800" text-anchor="middle">${label}</text>`;
-    }
-  }
-
-  // ticks
-  for (let i = 0; i <= 10; i++) {
-    const [x1, y1] = polar(i * 10, R);
-    const [x2, y2] = polar(i * 10, R - 8);
-    els += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#12141c" stroke-width="2"/>`;
-  }
-
-  // needle
-  const [nx, ny] = polar(localDial, R - 14);
-  els += `<line x1="${CX}" y1="${CY}" x2="${nx}" y2="${ny}" stroke="#fff" stroke-width="4" stroke-linecap="round"/>`;
-  els += `<circle cx="${CX}" cy="${CY}" r="10" fill="#fff"/>`;
-  const [hx, hy] = polar(localDial, R - 14);
-  els += `<circle cx="${hx}" cy="${hy}" r="13" fill="#fff" opacity="0.9"/>`;
-
-  svg.innerHTML = els;
-}
-
-// dial dragging (pointer events)
-const dialSvg = $('dial');
-function posFromEvent(e) {
-  const rect = dialSvg.getBoundingClientRect();
-  const scale = 400 / rect.width;
-  const x = (e.clientX - rect.left) * scale;
-  const y = (e.clientY - rect.top) * scale;
-  const th = Math.atan2(CY - y, x - CX); // 0..π across the top
-  const pos = (1 - Math.max(0, Math.min(Math.PI, th)) / Math.PI) * 100;
-  return Math.max(0, Math.min(100, pos));
-}
-function canDragNow() {
-  if (!S || !S.game) return false;
-  const g = S.game, m = me();
-  if (g.phase !== 'guess' || g.psychicId === S.you) return false;
-  return g.mode === 'coop' || m.team === g.activeTeam;
-}
-dialSvg.addEventListener('pointerdown', e => {
-  if (!canDragNow()) return;
-  dragging = true;
-  dialSvg.setPointerCapture(e.pointerId);
-  moveTo(posFromEvent(e));
-});
-dialSvg.addEventListener('pointermove', e => {
-  if (!dragging) return;
-  moveTo(posFromEvent(e));
-});
-dialSvg.addEventListener('pointerup', e => {
-  if (!dragging) return;
-  dragging = false;
-  socket.emit('dial', { pos: localDial }); // send final position
-});
-function moveTo(pos) {
-  localDial = pos;
-  drawDial();
-  const now = Date.now();
-  if (now - lastDialSent > 50) {
-    lastDialSent = now;
-    socket.emit('dial', { pos });
-  }
+function rematchRow(host) {
+  return host
+    ? `<button style="width:100%" onclick="act('rematch')">Rematch</button>`
+    : `<p style="color:var(--muted)">waiting for the host to start a rematch…</p>`;
 }
 </script>
+<script src="/js/wavelength.js"></script>
+<script src="/js/themind.js"></script>
+<script src="/js/hanabi.js"></script>
+<script src="/js/spyfall.js"></script>
+<script src="/js/loveletter.js"></script>
+<script src="/js/coup.js"></script>
+<script src="/js/codenames.js"></script>
 </body>
 </html>
