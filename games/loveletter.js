@@ -230,7 +230,7 @@ function viewFor(room, player) {
     deckLeft: s.deck.length,
     faceUp: s.faceUp,
     priestPeek: (s.priestPeek && s.priestPeek.viewer === player.id) ? s.priestPeek : null,
-    log: s.log.slice(-6),
+    log: s.log.slice(-14),
     roundWinner: s.roundWinner,
     winner: s.winner,
     hands: over ? Object.fromEntries(s.order.map(id => [id, s.hands[id]])) : null,

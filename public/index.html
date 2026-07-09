@@ -152,6 +152,26 @@
     border: 1px solid var(--cc, #3a4057); padding: 1px 6px; margin: 1px;
     font-size: .68rem; font-weight: 700; color: var(--cc);
   }
+
+  /* love letter side panels */
+  .ll-layout { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; }
+  .ll-main { order: 1; min-width: 0; }
+  .ll-log-box { order: 2; }
+  .ll-ref { order: 3; }
+  .side-box { background: var(--panel2); border-radius: 12px; padding: 12px; font-size: .78rem; }
+  .side-box h4 { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .ll-ref .ref-row { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.05); align-items: flex-start; }
+  .ll-ref .ref-row:last-child { border-bottom: none; }
+  .ll-ref .ref-v { font-weight: 800; min-width: 30px; color: var(--cc); }
+  .ll-ref .ref-txt b { display: block; font-size: .74rem; }
+  .ll-ref .ref-txt span { color: var(--muted); font-size: .66rem; line-height: 1.3; }
+  .ll-log-box .entries { max-height: 300px; overflow-y: auto; color: var(--muted); }
+  .ll-log-box .entries div { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+  @media (min-width: 1000px) {
+    #scr-game { max-width: 1120px; }
+    .ll-layout { grid-template-columns: 230px minmax(0, 1fr) 250px; align-items: start; }
+    .ll-ref { order: 1; } .ll-main { order: 2; } .ll-log-box { order: 3; position: sticky; top: 12px; }
+  }
 </style>
 </head>
 <body>

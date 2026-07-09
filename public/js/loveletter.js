@@ -23,6 +23,21 @@
     return `<span class="ll-mini" style="--cc:${a.c}">${a.e} ${v}</span>`;
   }
 
+  function refPanel(g) {
+    return `<div class="side-box ll-ref"><h4>📖 all cards</h4>` +
+      g.cardDefs.map(c => {
+        const a = ART[c.v];
+        return `<div class="ref-row" style="--cc:${a.c}">
+          <div class="ref-v">${a.e}<br>${c.v}×${c.count}</div>
+          <div class="ref-txt"><b style="color:${a.c}">${c.name}</b><span>${c.text}</span></div>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+  function logPanel(g) {
+    return `<div class="side-box ll-log-box"><h4>📜 turn log</h4>
+      <div class="entries">${g.log.length ? g.log.map(l => `<div>${esc(l)}</div>`).join('') : '<div>round begins…</div>'}</div></div>`;
+  }
+
   function render(root, S) {
     const g = S.game;
     const DEFS = {}; g.cardDefs.forEach(c => DEFS[c.v] = c);
@@ -72,8 +87,9 @@
           `<div style="text-align:center"><div style="font-size:.75rem;color:var(--muted)">${esc(playerName(id))}</div>${face(DEFS[h[0]])}</div>`).join('') + `</div>`;
       html += g.phase === 'gameover' ? rematchRow(isHost()) : `<button style="width:100%" onclick="act('next')">Next round ▶</button>`;
     }
-    html += `<div class="log">${g.log.map(l => `<div>${esc(l)}</div>`).join('')}</div>`;
-    root.innerHTML = html;
+    root.innerHTML = `<div class="ll-layout">${refPanel(g)}<div class="ll-main">${html}</div>${logPanel(g)}</div>`;
+    const entries = root.querySelector('.ll-log-box .entries');
+    if (entries) entries.scrollTop = entries.scrollHeight;
 
     root.querySelectorAll('[data-play]').forEach(b => b.onclick = () => {
       const v = +b.dataset.play;
