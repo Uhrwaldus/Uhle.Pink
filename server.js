@@ -20,7 +20,11 @@ const GAMES = {
 };
 
 const app = express();
-app.use(express.static(path.join(__dirname, 'public')));
+// no-cache: browsers must revalidate files after every deploy (cheap 304s via ETag)
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: true,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+}));
 const server = http.createServer(app);
 const io = new Server(server);
 
