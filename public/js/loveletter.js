@@ -37,7 +37,12 @@
         ${esc(playerName(id))} ❤${g.tokens[id]}${prot ? ' 🛡' : ''}${dead ? ' ☠' : ''}</span>`;
     }).join('') + `</div>`;
 
-    if (g.faceUp.length) html += `<p style="text-align:center;color:var(--muted);font-size:.8rem">face-up: ${g.faceUp.map(v => mini(v)).join(' ')}</p>`;
+    if (g.faceUp.length) {
+      html += `<div style="text-align:center;margin:8px 0">
+        <div style="font-size:.75rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">🂠 removed from this round</div>
+        <div style="display:flex;justify-content:center;flex-wrap:wrap">` +
+        g.faceUp.map(v => face(DEFS[v])).join('') + `</div></div>`;
+    }
     html += `<div style="text-align:center;font-size:.72rem;color:var(--muted);margin:4px 0">` +
       g.order.map(id => `<div>${esc(playerName(id))}: ${g.discards[id].map(v => mini(v)).join(' ') || '—'}</div>`).join('') + `</div>`;
 
