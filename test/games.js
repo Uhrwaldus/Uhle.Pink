@@ -283,7 +283,113 @@ async function testWerewolf() {
   Object.values(players).forEach(p => p.disconnect());
 }
 
-const TESTS = { werewolf: testWerewolf, themind: testTheMind, spyfall: testSpyfall, loveletter: testLoveLetter, coup: testCoup, codenames: testCodenames, hanabi: testHanabi };
+async function testJustOne() {
+  const { names, players, states } = await setup(3, 'justone');
+  players[names[0]].emit('start_game');
+  await wait(300);
+  let g = states[names[0]].game;
+  assert(g && g.phase === 'clue' && g.round === 1, 'justone did not start');
+  const guesserOf = () => names.find(n => states[n].game.isGuesser);
+  const writersOf = () => names.filter(n => !states[n].game.isGuesser);
+  // round 1: duplicate clues cancel
+  let writers = writersOf();
+  for (const w of writers) players[w].emit('action', { type: 'clue', word: 'same' });
+  await wait(300);
+  g = states[guesserOf()].game;
+  assert(g.phase === 'guess', 'should reach guess phase');
+  assert(g.visibleClues.length === 0, 'duplicates should cancel, got ' + JSON.stringify(g.visibleClues));
+  players[guesserOf()].emit('action', { type: 'pass' });
+  await wait(200);
+  players[names[0]].emit('action', { type: 'next' });
+  await wait(200);
+  // remaining rounds: distinct clues, guesser answers correctly (word read from a writer's view)
+  let safety = 0;
+  while (states[names[0]].game.phase !== 'gameover' && safety++ < 60) {
+    g = states[names[0]].game;
+    if (g.phase === 'clue') {
+      const ws = writersOf();
+      ws.forEach((w, i) => players[w].emit('action', { type: 'clue', word: 'clue' + i + Math.random().toString(36).slice(2, 5) }));
+    } else if (g.phase === 'guess') {
+      const word = states[writersOf()[0]].game.word;
+      players[guesserOf()].emit('action', { type: 'guess', word: word.toLowerCase() });
+    } else if (g.phase === 'result') {
+      players[names[0]].emit('action', { type: 'next' });
+    }
+    await wait(200);
+  }
+  g = states[names[0]].game;
+  assert(g.phase === 'gameover', 'justone never finished');
+  assert(g.score === 12, 'expected 12/13 (one pass), got ' + g.score);
+  console.log(`justone: 13 rounds OK, duplicates cancel, score ${g.score}/13`);
+  Object.values(players).forEach(p => p.disconnect());
+}
+
+async function testResistance() {
+  const names5 = ['P1', 'P2', 'P3', 'P4', 'P5'];
+  const players = {}, states = {};
+  for (const nm of names5) {
+    players[nm] = connect();
+    players[nm].on('state', s => { states[nm] = s; });
+  }
+  await wait(300);
+  const code = await new Promise(res => players.P1.emit('create_room', { name: 'P1' }, r => res(r.code)));
+  for (const nm of names5.slice(1)) {
+    await new Promise((res, rej) => players[nm].emit('join_room', { code, name: nm }, r => r.error ? rej(new Error(r.error)) : res()));
+  }
+  players.P1.emit('set_game', { game: 'resistance' });
+  await wait(200);
+  players.P1.emit('start_game');
+  await wait(300);
+  let g = states.P1.game;
+  assert(g && g.phase === 'propose', 'resistance did not start');
+  const spies = names5.filter(n => states[n].game.role === 'spy');
+  assert(spies.length === 2, 'expected 2 spies, got ' + spies.length);
+  assert(states[spies[0]].game.spies.length === 2, 'spies should see each other');
+  assert(!states[names5.find(n => !spies.includes(n))].game.spies, 'resistance must not see spies');
+
+  // test one rejected vote
+  let leaderN = names5.find(n => states[n].game.leader === states[n].you);
+  players[leaderN].emit('action', { type: 'propose', team: names5.slice(0, 2).map(n => states.P1.game ? states[n].you : null) });
+  await wait(250);
+  for (const n of names5) players[n].emit('action', { type: 'vote', approve: false });
+  await wait(300);
+  g = states.P1.game;
+  assert(g.phase === 'propose' && g.voteTrack === 1, 'reject should advance leader, track=' + g.voteTrack);
+  console.log('resistance: reject flow OK');
+
+  // now spies always fail, everyone approves -> spies win in 3 missions
+  let safety = 0;
+  while (states.P1.game.phase !== 'gameover' && safety++ < 60) {
+    g = states.P1.game;
+    if (g.phase === 'propose') {
+      leaderN = names5.find(n => states[n].game.leader === states[n].you);
+      const size = g.teamSizes[g.missionNum];
+      // leader picks themself + spies first (guarantees a fail)
+      const spyIds = spies.map(n => states[n].you);
+      const rest = names5.map(n => states[n].you).filter(id => !spyIds.includes(id));
+      const team = [...spyIds, ...rest].slice(0, size);
+      players[leaderN].emit('action', { type: 'propose', team });
+    } else if (g.phase === 'vote') {
+      for (const n of names5) if (!states[n].game.youVoted) players[n].emit('action', { type: 'vote', approve: true });
+    } else if (g.phase === 'mission') {
+      for (const n of names5) {
+        const mg = states[n].game;
+        if (mg.onTeam && !mg.youPlayed) players[n].emit('action', { type: 'mission_play', success: mg.role !== 'spy' });
+      }
+    } else if (g.phase === 'result') {
+      players.P1.emit('action', { type: 'next' });
+    }
+    await wait(200);
+  }
+  g = states.P1.game;
+  assert(g.phase === 'gameover', 'resistance never finished');
+  assert(g.winner === 'spies', 'spies always sabotaging should win, got ' + g.winner);
+  assert(g.roles, 'roles should reveal at end');
+  console.log('resistance: full game OK (spies win by sabotage)');
+  Object.values(players).forEach(p => p.disconnect());
+}
+
+const TESTS = { justone: testJustOne, resistance: testResistance, werewolf: testWerewolf, themind: testTheMind, spyfall: testSpyfall, loveletter: testLoveLetter, coup: testCoup, codenames: testCodenames, hanabi: testHanabi };
 
 async function main() {
   const server = spawn('node', [path.join(__dirname, '..', 'server.js')], {

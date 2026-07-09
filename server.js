@@ -15,6 +15,8 @@ const GAMES = {
   codenames: require('./games/codenames'),
   hanabi: require('./games/hanabi'),
   werewolf: require('./games/werewolf'),
+  justone: require('./games/justone'),
+  resistance: require('./games/resistance'),
 };
 
 const app = express();
