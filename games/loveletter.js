@@ -1,13 +1,16 @@
-// Love Letter — 16-card deduction. Win rounds to collect tokens.
+// Love Letter (2019 edition) — 21 cards incl. Spy and Chancellor.
+// House rule: removed cards are always face-down (1 with 2 players, 2 with 3-4).
 const CARD_DEFS = [
-  { v: 1, name: 'Guard', count: 5, text: 'Guess another player\'s card (not Guard). Correct = they\'re out.' },
+  { v: 0, name: 'Spy', count: 2, text: 'No effect. End of round: if you\'re the only player still in who played/discarded a Spy, gain a bonus token.' },
+  { v: 1, name: 'Guard', count: 6, text: 'Guess another player\'s card (not Guard). Correct = they\'re out.' },
   { v: 2, name: 'Priest', count: 2, text: 'Secretly look at another player\'s hand.' },
   { v: 3, name: 'Baron', count: 2, text: 'Compare hands with another player. Lower card is out.' },
   { v: 4, name: 'Handmaid', count: 2, text: 'You are protected until your next turn.' },
   { v: 5, name: 'Prince', count: 2, text: 'Choose a player (or yourself) to discard and draw.' },
-  { v: 6, name: 'King', count: 1, text: 'Trade hands with another player.' },
-  { v: 7, name: 'Countess', count: 1, text: 'Must be played if you hold King or Prince.' },
-  { v: 8, name: 'Princess', count: 1, text: 'If you play or discard this, you\'re out.' },
+  { v: 6, name: 'Chancellor', count: 2, text: 'Draw 2 cards. Keep one of your 3, return the rest to the bottom of the deck.' },
+  { v: 7, name: 'King', count: 1, text: 'Trade hands with another player.' },
+  { v: 8, name: 'Countess', count: 1, text: 'Must be played if you hold King or Prince.' },
+  { v: 9, name: 'Princess', count: 1, text: 'If you play or discard this, you\'re out.' },
 ];
 const NAME = {}; CARD_DEFS.forEach(c => NAME[c.v] = c.name);
 
@@ -26,7 +29,7 @@ function fullDeck() {
   return shuffled(d);
 }
 
-function tokensToWin(n) { return n === 2 ? 7 : n === 3 ? 5 : 4; }
+function tokensToWin(n) { return n === 2 ? 6 : n === 3 ? 5 : 4; }
 
 function canStart(room) {
   const n = room.players.size;
@@ -44,10 +47,11 @@ function create(room) {
     tokensToWin: tokensToWin(ids.length),
     round: 0,
     starterIdx: -1,
-    winner: null, roundWinner: null,
-    // round fields set below
-    deck: [], burned: null, faceUp: [], hands: {}, discards: {},
-    eliminated: {}, protected: {}, current: null, priestPeek: null, log: [],
+    winner: null, roundWinner: null, spyBonus: null,
+    deck: [], burned: [], hands: {}, discards: {}, spyPlayed: {},
+    eliminated: {}, protected: {}, current: null, priestPeek: null,
+    chanc: null, // { pid, options }
+    log: [],
   };
   room.state = state;
   startRound(room);
@@ -59,12 +63,15 @@ function startRound(room) {
   s.round += 1;
   s.phase = 'turn';
   s.roundWinner = null;
+  s.spyBonus = null;
   s.priestPeek = null;
+  s.chanc = null;
   s.log = [];
   s.deck = fullDeck();
-  s.burned = s.deck.pop();
-  s.faceUp = s.order.length === 2 ? [s.deck.pop(), s.deck.pop(), s.deck.pop()] : [];
-  s.hands = {}; s.discards = {}; s.eliminated = {}; s.protected = {};
+  // house rule: always face-down removals — 1 for 2 players, 2 for 3-4
+  const burnCount = s.order.length === 2 ? 1 : 2;
+  s.burned = s.deck.splice(0, burnCount);
+  s.hands = {}; s.discards = {}; s.eliminated = {}; s.protected = {}; s.spyPlayed = {};
   for (const id of s.order) { s.hands[id] = [s.deck.pop()]; s.discards[id] = []; }
   s.starterIdx = (s.starterIdx + 1) % s.order.length;
   s.current = s.order[s.starterIdx];
@@ -74,10 +81,15 @@ function startRound(room) {
 function alive(s) { return s.order.filter(id => !s.eliminated[id]); }
 function nameOf(room, id) { const p = room.players.get(id); return p ? p.name : '?'; }
 
+function discardCard(s, pid, v) {
+  s.discards[pid].push(v);
+  if (v === 0) s.spyPlayed[pid] = true;
+}
+
 function eliminate(room, id, why) {
   const s = room.state;
   s.eliminated[id] = true;
-  s.discards[id].push(...s.hands[id]);
+  for (const v of s.hands[id]) discardCard(s, id, v);
   s.hands[id] = [];
   s.log.push(`${nameOf(room, id)} is out (${why})`);
 }
@@ -86,10 +98,29 @@ function targetable(s, byId) {
   return alive(s).filter(id => id !== byId && !s.protected[id]);
 }
 
+function drawFor(s, pid) {
+  if (s.deck.length) s.hands[pid].push(s.deck.pop());
+  else if (s.burned.length) s.hands[pid].push(s.burned.pop()); // Prince edge case
+}
+
 function handleAction(room, player, msg) {
   const s = room.state;
   switch (msg.type) {
     case 'play': return play(room, player, msg);
+    case 'chancellor_keep': {
+      if (s.phase !== 'chancellor' || !s.chanc || s.chanc.pid !== player.id) return false;
+      const keep = msg.card;
+      const idx = s.chanc.options.indexOf(keep);
+      if (idx < 0) return false;
+      const rest = s.chanc.options.slice();
+      rest.splice(idx, 1);
+      s.hands[player.id] = [keep];
+      s.deck.unshift(...rest); // bottom of the deck
+      s.log.push(`${nameOf(room, player.id)} kept a card, returned ${rest.length} to the bottom`);
+      s.chanc = null;
+      s.phase = 'turn';
+      return finishTurn(room);
+    }
     case 'next': {
       if (s.phase !== 'roundend') return false;
       startRound(room);
@@ -110,31 +141,32 @@ function play(room, player, msg) {
   const hand = s.hands[player.id];
   const card = msg.card;
   if (!hand.includes(card)) return false;
-  // Countess rule: holding Countess + (King or Prince) forces Countess
-  if (hand.includes(7) && (card === 5 || card === 6)) return false;
+  // Countess rule: holding Countess (8) + King (7) or Prince (5) forces the Countess
+  if (hand.includes(8) && (card === 5 || card === 7)) return false;
 
   const others = targetable(s, player.id);
-  const needsTarget = [1, 2, 3, 6].includes(card) || (card === 5);
+  const needsTarget = [1, 2, 3, 7].includes(card);
   let target = msg.target;
-  // no valid opponents -> card fizzles (Prince may still self-target)
-  const fizzle = [1, 2, 3, 6].includes(card) && others.length === 0;
-  if (!fizzle && needsTarget) {
-    const valid = card === 5 ? [...others, player.id] : others;
+  const fizzle = needsTarget && others.length === 0;
+  if (needsTarget && !fizzle && !others.includes(target)) return false;
+  if (card === 5) {
+    const valid = [...others, player.id];
     if (!valid.includes(target)) return false;
   }
 
   // discard the played card
-  s.hands[player.id] = hand.filter((c, i) => i !== hand.indexOf(card));
-  s.discards[player.id].push(card);
+  hand.splice(hand.indexOf(card), 1);
+  discardCard(s, player.id, card);
   s.protected[player.id] = false;
   s.priestPeek = null;
   s.log.push(`${nameOf(room, player.id)} played ${NAME[card]}`);
 
   switch (card) {
+    case 0: break; // Spy — no effect now, bonus checked at round end
     case 1: { // Guard
       if (!fizzle) {
         const guess = msg.guess;
-        if (!(guess >= 2 && guess <= 8)) return false;
+        if (!(guess >= 0 && guess <= 9) || guess === 1) return false;
         if (s.hands[target][0] === guess) eliminate(room, target, `Guard guessed ${NAME[guess]}`);
         else s.log.push(`…guessed ${NAME[guess]} on ${nameOf(room, target)} — wrong`);
       }
@@ -157,13 +189,21 @@ function play(room, player, msg) {
     case 5: { // Prince
       const t = others.length === 0 ? player.id : target;
       const dumped = s.hands[t][0];
-      s.discards[t].push(dumped);
       s.hands[t] = [];
-      if (dumped === 8) eliminate(room, t, 'discarded the Princess');
-      else s.hands[t] = [s.deck.length ? s.deck.pop() : s.burned];
+      discardCard(s, t, dumped);
+      if (dumped === 9) eliminate(room, t, 'discarded the Princess');
+      else drawFor(s, t);
       break;
     }
-    case 6: { // King
+    case 6: { // Chancellor
+      if (s.deck.length === 0) { s.log.push('…but the deck is empty, no effect'); break; }
+      const drawn = s.deck.splice(-Math.min(2, s.deck.length)).reverse();
+      s.chanc = { pid: player.id, options: [...s.hands[player.id], ...drawn] };
+      s.hands[player.id] = [];
+      s.phase = 'chancellor';
+      return true; // turn finishes after chancellor_keep
+    }
+    case 7: { // King
       if (!fizzle) {
         const tmp = s.hands[player.id];
         s.hands[player.id] = s.hands[target];
@@ -171,24 +211,24 @@ function play(room, player, msg) {
       }
       break;
     }
-    case 7: break;
-    case 8: eliminate(room, player.id, 'played the Princess'); break;
+    case 8: break; // Countess
+    case 9: eliminate(room, player.id, 'played the Princess'); break;
   }
+  return finishTurn(room);
+}
 
-  // round over?
+function finishTurn(room) {
+  const s = room.state;
   const a = alive(s);
   if (a.length === 1) return endRound(room, a[0], 'last one standing');
   if (s.deck.length === 0) {
-    // showdown: highest card wins
     let best = null;
     for (const id of a) {
-      const v = s.hands[id][0];
+      const v = s.hands[id].length ? s.hands[id][0] : -1;
       if (!best || v > best.v) best = { id, v };
     }
-    return endRound(room, best.id, `showdown — ${NAME[best.v]} wins`);
+    return endRound(room, best.id, `showdown — ${NAME[best.v] || 'nothing'} wins`);
   }
-
-  // next player's turn
   let idx = s.order.indexOf(s.current);
   do { idx = (idx + 1) % s.order.length; } while (s.eliminated[s.order[idx]]);
   s.current = s.order[idx];
@@ -201,8 +241,19 @@ function endRound(room, winnerId, why) {
   s.tokens[winnerId] += 1;
   s.roundWinner = winnerId;
   s.log.push(`${nameOf(room, winnerId)} wins the round (${why})`);
-  if (s.tokens[winnerId] >= s.tokensToWin) {
-    s.winner = winnerId;
+  // Spy bonus: exactly one surviving player who played/discarded a Spy
+  const spyIds = alive(s).filter(id => s.spyPlayed[id]);
+  if (spyIds.length === 1) {
+    s.spyBonus = spyIds[0];
+    s.tokens[spyIds[0]] += 1;
+    s.log.push(`🕵️ ${nameOf(room, spyIds[0])} gets a Spy bonus token`);
+  } else {
+    s.spyBonus = null;
+  }
+  const champs = s.order.filter(id => s.tokens[id] >= s.tokensToWin)
+    .sort((x, y) => s.tokens[y] - s.tokens[x]);
+  if (champs.length) {
+    s.winner = champs[0];
     s.phase = 'gameover';
   } else {
     s.phase = 'roundend';
@@ -228,10 +279,13 @@ function viewFor(room, player) {
     eliminated: s.eliminated,
     protected: s.protected,
     deckLeft: s.deck.length,
-    faceUp: s.faceUp,
+    burnedCount: s.burned.length,
     priestPeek: (s.priestPeek && s.priestPeek.viewer === player.id) ? s.priestPeek : null,
+    chancYou: (s.chanc && s.chanc.pid === player.id) ? s.chanc.options : null,
+    chancWho: s.chanc ? s.chanc.pid : null,
     log: s.log.slice(-14),
     roundWinner: s.roundWinner,
+    spyBonus: over ? s.spyBonus : null,
     winner: s.winner,
     hands: over ? Object.fromEntries(s.order.map(id => [id, s.hands[id]])) : null,
     targetable: targetable(s, player.id),

@@ -3,10 +3,11 @@
   let pendingCard = null;
 
   const ART = {
-    1: { e: '🛡️', c: '#8fa3c7' }, 2: { e: '👁️', c: '#b58ff0' },
-    3: { e: '⚖️', c: '#c79b5a' }, 4: { e: '🕊️', c: '#7fd4c1' },
-    5: { e: '🤴', c: '#f0a35e' }, 6: { e: '👑', c: '#ffd166' },
-    7: { e: '🌹', c: '#e57373' }, 8: { e: '👸', c: '#ff8fb3' },
+    0: { e: '🕵️', c: '#9aa0b4' }, 1: { e: '🛡️', c: '#8fa3c7' },
+    2: { e: '👁️', c: '#b58ff0' }, 3: { e: '⚖️', c: '#c79b5a' },
+    4: { e: '🕊️', c: '#7fd4c1' }, 5: { e: '🤴', c: '#f0a35e' },
+    6: { e: '📜', c: '#8fd07f' }, 7: { e: '👑', c: '#ffd166' },
+    8: { e: '🌹', c: '#e57373' }, 9: { e: '👸', c: '#ff8fb3' },
   };
 
   function face(def, opts = {}) {
@@ -52,12 +53,7 @@
         ${esc(playerName(id))} ❤${g.tokens[id]}${prot ? ' 🛡' : ''}${dead ? ' ☠' : ''}</span>`;
     }).join('') + `</div>`;
 
-    if (g.faceUp.length) {
-      html += `<div style="text-align:center;margin:8px 0">
-        <div style="font-size:.75rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">🂠 removed from this round</div>
-        <div style="display:flex;justify-content:center;flex-wrap:wrap">` +
-        g.faceUp.map(v => face(DEFS[v])).join('') + `</div></div>`;
-    }
+    if (g.burnedCount) html += `<p style="text-align:center;color:var(--muted);font-size:.75rem">🂠 ${g.burnedCount} card${g.burnedCount > 1 ? 's' : ''} removed face-down</p>`;
     html += `<div style="text-align:center;font-size:.72rem;color:var(--muted);margin:4px 0">` +
       g.order.map(id => `<div>${esc(playerName(id))}: ${g.discards[id].map(v => mini(v)).join(' ') || '—'}</div>`).join('') + `</div>`;
 
@@ -79,9 +75,19 @@
         if (g.hand.length) html += `<div style="display:flex;justify-content:center">${face(DEFS[g.hand[0]])}</div>`;
       }
     }
+    if (g.phase === 'chancellor') {
+      if (g.chancYou) {
+        html += `<p class="big" style="text-align:center">📜 Chancellor — keep ONE card (the rest go to the bottom of the deck):</p>
+          <div style="display:flex;justify-content:center;flex-wrap:wrap">` +
+          g.chancYou.map(v => face(DEFS[v], { click: true, attr: `data-keep="${v}"` })).join('') + `</div>`;
+      } else {
+        html += `<p class="big" style="text-align:center">📜 ${esc(playerName(g.chancWho))} is consulting the Chancellor…</p>`;
+      }
+    }
     if (g.phase === 'roundend' || g.phase === 'gameover') {
       const w = g.phase === 'gameover' ? g.winner : g.roundWinner;
       html += `<div class="winner-banner" style="color:var(--band2)">${g.phase === 'gameover' ? '👑' : '💌'} ${esc(playerName(w))} wins the ${g.phase === 'gameover' ? 'game' : 'round'}!</div>`;
+      if (g.spyBonus) html += `<p style="text-align:center;color:var(--band4)">🕵️ ${esc(playerName(g.spyBonus))} earned a Spy bonus token</p>`;
       if (g.hands) html += `<div style="display:flex;justify-content:center;flex-wrap:wrap">` +
         Object.entries(g.hands).filter(([, h]) => h.length).map(([id, h]) =>
           `<div style="text-align:center"><div style="font-size:.75rem;color:var(--muted)">${esc(playerName(id))}</div>${face(DEFS[h[0]])}</div>`).join('') + `</div>`;
@@ -93,16 +99,17 @@
 
     root.querySelectorAll('[data-play]').forEach(b => b.onclick = () => {
       const v = +b.dataset.play;
-      if ([1, 2, 3, 6].includes(v) && g.targetable.length) { pendingCard = v; render(root, S); }
+      if ([1, 2, 3, 7].includes(v) && g.targetable.length) { pendingCard = v; render(root, S); }
       else if (v === 5) { pendingCard = v; render(root, S); }
       else act('play', { card: v });
     });
+    root.querySelectorAll('[data-keep]').forEach(b => b.onclick = () => act('chancellor_keep', { card: +b.dataset.keep }));
     root.querySelectorAll('[data-target]').forEach(b => b.onclick = () => {
       const target = b.dataset.target;
       if (pendingCard === 1) {
         const wrap = document.createElement('div');
         wrap.innerHTML = `<p style="text-align:center;margin-top:8px">guess their card:</p><div style="display:flex;justify-content:center;flex-wrap:wrap">` +
-          g.cardDefs.filter(c => c.v >= 2).map(c => face(c, { click: true, attr: `data-guess="${c.v}"` })).join('') + `</div>`;
+          g.cardDefs.filter(c => c.v !== 1).map(c => face(c, { click: true, attr: `data-guess="${c.v}"` })).join('') + `</div>`;
         root.appendChild(wrap);
         wrap.querySelectorAll('[data-guess]').forEach(gb => gb.onclick = () => {
           act('play', { card: 1, target, guess: +gb.dataset.guess });

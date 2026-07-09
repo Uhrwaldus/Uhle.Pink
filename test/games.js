@@ -99,15 +99,20 @@ async function testLoveLetter() {
     const g = states[names[0]].game;
     if (g.phase === 'gameover') break;
     if (g.phase === 'roundend') { players[names[0]].emit('action', { type: 'next' }); await wait(150); continue; }
+    if (g.phase === 'chancellor') {
+      const who = byId(states, names, g.chancWho);
+      players[who].emit('action', { type: 'chancellor_keep', card: states[who].game.chancYou[0] });
+      await wait(150); continue;
+    }
     const cur = byId(states, names, g.current);
     const mg = states[cur].game;
     const hand = mg.hand;
-    // pick a legal card: prefer non-princess; countess rule
+    // pick a legal card: prefer non-princess; countess rule (8 with 5/7)
     let card;
-    if (hand.includes(7) && (hand.includes(5) || hand.includes(6))) card = 7;
-    else card = hand.find(c => c !== 8) ?? hand[0];
+    if (hand.includes(8) && (hand.includes(5) || hand.includes(7))) card = 8;
+    else card = hand.find(c => c !== 9) ?? hand[0];
     const msg = { type: 'play', card };
-    if ([1, 2, 3, 6].includes(card) && mg.targetable.length) msg.target = mg.targetable[0];
+    if ([1, 2, 3, 7].includes(card) && mg.targetable.length) msg.target = mg.targetable[0];
     if (card === 5) msg.target = mg.targetable[0] || states[cur].you;
     if (card === 1) msg.guess = 5;
     players[cur].emit('action', msg);
