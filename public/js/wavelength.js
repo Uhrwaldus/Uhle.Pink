@@ -16,15 +16,21 @@
 
   function skeleton(root) {
     root.innerHTML = `
-      <div class="scorebar">
-        <div class="score blue" id="wl-score-blue">0</div>
-        <div class="round-info" id="wl-round"></div>
-        <div class="score red" id="wl-score-red">0</div>
-      </div>
-      <div class="spectrum"><span class="left" id="wl-left"></span><span class="right" id="wl-right"></span></div>
-      <svg id="wl-dial" viewBox="0 0 400 225" xmlns="http://www.w3.org/2000/svg"></svg>
-      <div class="clue-banner" id="wl-clue" style="display:none"><span class="lbl">the clue</span><span id="wl-clue-text"></span></div>
-      <div class="phase-box" id="wl-phase"></div>`;
+      <div class="wl-layout">
+        <div class="wl-left">
+          <div class="scorebar">
+            <div class="score blue" id="wl-score-blue">0</div>
+            <div class="round-info" id="wl-round"></div>
+            <div class="score red" id="wl-score-red">0</div>
+          </div>
+          <div class="spectrum"><span class="left" id="wl-left"></span><span class="right" id="wl-right"></span></div>
+          <svg id="wl-dial" viewBox="0 0 400 225" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="wl-right side-box">
+          <div class="clue-banner" id="wl-clue" style="display:none"><span class="lbl">the clue</span><span id="wl-clue-text"></span></div>
+          <div class="phase-box" id="wl-phase"></div>
+        </div>
+      </div>`;
     const svg = root.querySelector('#wl-dial');
     svg.addEventListener('pointerdown', e => {
       if (!canDrag()) return;

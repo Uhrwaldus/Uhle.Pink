@@ -130,6 +130,13 @@
   .hb-red { background: #a33; } .hb-yellow { background: #a90; } .hb-green { background: #2a7; }
   .hb-blue { background: #36c; } .hb-white { background: #ccc; color: #222; }
 
+  /* wavelength side-by-side layout */
+  .wl-layout { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; }
+  @media (min-width: 1000px) {
+    .wl-layout { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
+    .wl-right { position: sticky; top: 12px; }
+  }
+
   /* card faces (love letter / coup) */
   .ll-card {
     width: 108px; min-height: 152px; border-radius: 12px; margin: 4px;
