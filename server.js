@@ -57,6 +57,21 @@ function recordCoopScore(room) {
   return leaderboard[s.totalRounds].indexOf(entry) + 1 || null;
 }
 
+// version info: which commit is live, since when
+let COMMIT = 'unknown';
+try { COMMIT = require('child_process').execSync('git rev-parse --short HEAD', { cwd: __dirname }).toString().trim(); } catch {}
+let COMMIT_MSG = '';
+try { COMMIT_MSG = require('child_process').execSync('git log -1 --format=%s', { cwd: __dirname }).toString().trim(); } catch {}
+const STARTED = new Date();
+app.get('/version', (req, res) => {
+  res.json({
+    commit: COMMIT,
+    update: COMMIT_MSG,
+    running_since: STARTED.toISOString(),
+    uptime_minutes: Math.floor((Date.now() - STARTED.getTime()) / 60000),
+  });
+});
+
 // deploy helper: is anyone connected right now?
 app.get('/busy', (req, res) => {
   let busy = false;

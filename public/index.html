@@ -242,6 +242,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="version-footer" style="position:fixed;bottom:6px;right:10px;font-size:.65rem;color:var(--muted);opacity:.7"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -328,6 +329,13 @@ socket.on('connect', () => {
   }
 });
 socket.on('toast', toast);
+
+// show which version is live, bottom-right
+fetch('/version').then(r => r.json()).then(v => {
+  const up = v.uptime_minutes < 60 ? v.uptime_minutes + 'min' : Math.floor(v.uptime_minutes / 60) + 'h';
+  document.getElementById('version-footer').textContent = `v.${v.commit} · up ${up}`;
+  document.getElementById('version-footer').title = v.update;
+}).catch(() => {});
 
 // ---------- state routing ----------
 let lobbyPeek = false; // player chose to look at the dashboard while a game runs
