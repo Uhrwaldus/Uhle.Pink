@@ -355,7 +355,11 @@ document.querySelectorAll('[data-team]').forEach(btn => {
   btn.onclick = () => socket.emit('set_team', { team: btn.dataset.team });
 });
 $('btn-start').onclick = () => socket.emit('start_game');
-$('btn-lobby').onclick = () => socket.emit('set_game', { game: S.gameName }); // resets state -> lobby
+$('btn-lobby').onclick = () => {
+  const over = S.game && ['gameover', 'win', 'reveal'].includes(S.game.phase);
+  if (!over && !confirm('Abandon the current game and send everyone back to the lobby?')) return;
+  socket.emit('to_lobby');
+};
 
 function usesTeams() {
   return S.gameName === 'codenames' || (S.gameName === 'wavelength' && S.mode !== 'coop');
@@ -440,7 +444,8 @@ function renderGame() {
   const ui = GameUI[S.gameName];
   const root = $('game-root');
   const over = ['gameover', 'win', 'reveal'].includes(S.game.phase);
-  $('btn-lobby').style.display = (over && isHost()) ? '' : 'none';
+  $('btn-lobby').style.display = isHost() ? '' : 'none';
+  $('btn-lobby').textContent = over ? '⬅ Back to lobby — pick the next game' : '⬅ Back to lobby (abandon game)';
   if (!ui) { root.innerHTML = '<p>Unknown game…</p>'; return; }
   ui.render(root, S);
 }

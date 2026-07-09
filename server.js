@@ -150,6 +150,13 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  // Host can pull everyone back to the lobby at any time (keeps the room).
+  socket.on('to_lobby', () => {
+    if (!room || !player || player.id !== room.hostId) return;
+    room.state = null;
+    broadcast(room);
+  });
+
   socket.on('set_mode', ({ mode }) => {
     if (!room || !player || player.id !== room.hostId) return;
     if (mode !== 'teams' && mode !== 'coop') return;
