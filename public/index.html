@@ -231,6 +231,7 @@
     </div>
     <button id="btn-start" style="width:100%">Start game</button>
     <p id="start-hint" style="color:var(--muted);font-size:.75rem;text-align:center;margin-top:8px"></p>
+    <button id="btn-leave" class="secondary" style="width:100%;margin-top:10px;padding:8px;font-size:.85rem">🚪 Leave this room</button>
   </div>
 </div>
 
@@ -378,6 +379,15 @@ document.querySelectorAll('[data-team]').forEach(btn => {
   btn.onclick = () => socket.emit('set_team', { team: btn.dataset.team });
 });
 $('btn-start').onclick = () => socket.emit('start_game');
+$('btn-leave').onclick = () => {
+  if (S && S.game && !['gameover', 'win', 'reveal'].includes(S.game.phase)) return toast('Game in progress — return to the game or wait for it to end');
+  socket.emit('leave_room', () => {});
+  sessionStorage.removeItem('wl');
+  S = null;
+  lobbyPeek = false;
+  $('code-input').value = '';
+  show('scr-home');
+};
 $('btn-lobby').onclick = () => {
   const over = S.game && ['gameover', 'win', 'reveal'].includes(S.game.phase);
   if (!over && !confirm('Abandon the current game and send everyone back to the lobby?')) return;

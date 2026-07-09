@@ -166,6 +166,29 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  // Leave the room entirely (lobby only). Host role passes to the next player.
+  socket.on('leave_room', (cb) => {
+    if (!room || !player) { if (cb) cb({ ok: true }); return; }
+    if (room.state && room.state.phase !== 'lobby' && room.state.phase !== 'gameover'
+        && room.state.phase !== 'win' && room.state.phase !== 'reveal') {
+      socket.emit('toast', 'Game in progress — go back to the lobby first');
+      if (cb) cb({ error: 'in game' });
+      return;
+    }
+    const r = room;
+    r.players.delete(player.id);
+    socket.leave(r.code);
+    room = null; player = null;
+    if (r.players.size === 0) { rooms.delete(r.code); if (cb) cb({ ok: true }); return; }
+    if (![...r.players.keys()].includes(r.hostId)) {
+      const next = [...r.players.values()].find(p => p.connected) || [...r.players.values()][0];
+      r.hostId = next.id;
+    }
+    r.state = null; // finished-game views reference the departed player — reset to lobby
+    broadcast(r);
+    if (cb) cb({ ok: true });
+  });
+
   // Host can pull everyone back to the lobby at any time (keeps the room).
   socket.on('to_lobby', () => {
     if (!room || !player || player.id !== room.hostId) return;
