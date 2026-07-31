@@ -331,7 +331,7 @@ socket.on('connect', () => {
 socket.on('toast', toast);
 
 // show which version is live, bottom-right
-fetch('/version').then(r => r.json()).then(v => {
+if (typeof fetch === 'function') fetch('/version').then(r => r.json()).then(v => {
   const up = v.uptime_minutes < 60 ? v.uptime_minutes + 'min' : Math.floor(v.uptime_minutes / 60) + 'h';
   document.getElementById('version-footer').textContent = `v.${v.commit} · up ${up}`;
   document.getElementById('version-footer').title = v.update;
@@ -436,15 +436,15 @@ function renderLobby() {
         <button id="mode-teams" class="secondary" ${host ? '' : 'disabled'} style="${!coop ? 'outline:2px solid var(--blue)' : ''}">⚔️ Teams</button>
         <button id="mode-coop" class="secondary" ${host ? '' : 'disabled'} style="${coop ? 'outline:2px solid var(--band2)' : ''}">🤝 Co-op</button>
       </div>
-      ${coop ? `
+      <div style="font-size:.75rem;color:var(--muted);text-align:center;margin-bottom:4px">clues each player writes</div>
       <div class="row" style="margin-bottom:10px">
-        ${[10, 20, 30].map(r => `<button data-rounds="${r}" class="secondary" ${host ? '' : 'disabled'} style="${S.coopRounds === r ? 'outline:2px solid var(--band2)' : ''}">${r} turns</button>`).join('')}
+        ${[3, 4, 5].map(r => `<button data-prompts="${r}" class="secondary" ${host ? '' : 'disabled'} style="${(S.promptsEach || 3) === r ? 'outline:2px solid var(--band2)' : ''}">${r} each</button>`).join('')}
       </div>
-      <input type="text" id="team-name-input" placeholder="Team name (for the leaderboard)" maxlength="24" ${host ? '' : 'disabled'} value="${esc(S.teamName || '')}">` : ''}`;
+      ${coop ? `<input type="text" id="team-name-input" placeholder="Team name (for the leaderboard)" maxlength="24" ${host ? '' : 'disabled'} value="${esc(S.teamName || '')}">` : ''}`;
     if (host) {
       opts.querySelector('#mode-teams').onclick = () => socket.emit('set_mode', { mode: 'teams' });
       opts.querySelector('#mode-coop').onclick = () => socket.emit('set_mode', { mode: 'coop' });
-      opts.querySelectorAll('[data-rounds]').forEach(b => b.onclick = () => socket.emit('set_rounds', { rounds: +b.dataset.rounds }));
+      opts.querySelectorAll('[data-prompts]').forEach(b => b.onclick = () => socket.emit('set_prompts', { prompts: +b.dataset.prompts }));
       const tn = opts.querySelector('#team-name-input');
       if (tn) tn.addEventListener('change', () => socket.emit('set_team_name', { name: tn.value }));
     }

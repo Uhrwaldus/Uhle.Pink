@@ -33,7 +33,7 @@ const rooms = new Map(); // code -> room
 
 // ---- co-op leaderboard (JSON file; per rounds-bracket) ----
 const LB_FILE = path.join(__dirname, 'leaderboard.json');
-let leaderboard = { 10: [], 20: [], 30: [] };
+let leaderboard = { 3: [], 4: [], 5: [] };
 try { leaderboard = { ...leaderboard, ...JSON.parse(fs.readFileSync(LB_FILE, 'utf8')) }; } catch {}
 
 function saveLeaderboard() {
@@ -42,19 +42,22 @@ function saveLeaderboard() {
 
 function recordCoopScore(room) {
   const s = room.state;
+  const max = s.queue.length * 4;
   const entry = {
     name: (room.teamName || 'Anonymous').slice(0, 24),
     score: s.scores.total,
-    max: s.totalRounds * 4,
+    max,
+    pct: max ? s.scores.total / max : 0,
     players: [...room.players.values()].map(p => p.name).slice(0, 8),
     date: new Date().toISOString().slice(0, 10),
   };
-  const bracket = leaderboard[s.totalRounds] || (leaderboard[s.totalRounds] = []);
+  const key = s.perPlayer;
+  const bracket = leaderboard[key] || (leaderboard[key] = []);
   bracket.push(entry);
-  bracket.sort((a, b) => b.score - a.score);
-  leaderboard[s.totalRounds] = bracket.slice(0, 50);
+  bracket.sort((a, b) => (b.pct - a.pct) || (b.score - a.score));
+  leaderboard[key] = bracket.slice(0, 50);
   saveLeaderboard();
-  return leaderboard[s.totalRounds].indexOf(entry) + 1 || null;
+  return leaderboard[key].indexOf(entry) + 1 || null;
 }
 
 // version info: which commit is live, since when
@@ -82,9 +85,9 @@ app.get('/busy', (req, res) => {
 });
 
 app.get('/leaderboard', (req, res) => {
-  const rounds = parseInt(req.query.rounds, 10);
-  const bracket = leaderboard[rounds] || [];
-  res.json({ rounds, top: bracket.slice(0, 10) });
+  const prompts = parseInt(req.query.prompts || req.query.rounds, 10);
+  const bracket = leaderboard[prompts] || [];
+  res.json({ prompts, top: bracket.slice(0, 10) });
 });
 
 function makeCode() {
@@ -112,7 +115,7 @@ function broadcast(room) {
       hostId: room.hostId,
       gameName: room.gameName,
       mode: room.mode || 'teams',
-      coopRounds: room.coopRounds || 10,
+      promptsEach: room.promptsEach || 3,
       teamName: room.teamName || '',
       players: publicPlayers(room),
       game: room.state ? game.viewFor(room, p) : null,
@@ -219,11 +222,11 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
-  socket.on('set_rounds', ({ rounds }) => {
+  socket.on('set_prompts', ({ prompts }) => {
     if (!room || !player || player.id !== room.hostId) return;
-    if (![10, 20, 30].includes(rounds)) return;
+    if (![3, 4, 5].includes(prompts)) return;
     if (!inLobby(room)) return;
-    room.coopRounds = rounds;
+    room.promptsEach = prompts;
     broadcast(room);
   });
 

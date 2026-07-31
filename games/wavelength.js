@@ -1,7 +1,16 @@
-// Wavelength game logic (teams + co-op).
-const WIN_SCORE = 10;
-const COOP_ROUND_OPTIONS = [10, 20, 30];
-const BANDS = [ [4, 4], [8, 3], [12, 2] ];
+// Wavelength (phase-based).
+//   Phase 1 "write": every player gets N spectrum cards, each with a hidden
+//     target, and writes a clue for each — everyone at the same time.
+//   Phase 2 "guess": the clues are played one at a time. The writer watches;
+//     their team (teams mode) or everyone else (co-op) moves the dial.
+//
+// Scoring bands are equal width around the target:
+//   |diff| <= 2 -> 4 pts,  <= 6 -> 3 pts,  <= 10 -> 2 pts
+// Teams mode: a non-bullseye guess lets the other team vote left/right for +1.
+// The game ends when every prompt has been played; highest score wins.
+
+const BANDS = [[2, 4], [6, 3], [10, 2]];
+const PROMPT_OPTIONS = [3, 4, 5];
 
 const CARDS = [
   ['Hot', 'Cold'], ['Underrated', 'Overrated'], ['Scary', 'Not scary'],
@@ -44,14 +53,10 @@ function shuffled(arr) {
 function teamMembers(room, team) {
   return [...room.players.values()].filter(p => p.team === team);
 }
-
-function allPlayers(room) {
-  return [...room.players.values()];
-}
-
-function newTarget() {
-  return 13 + Math.floor(Math.random() * 75);
-}
+function allPlayers(room) { return [...room.players.values()]; }
+function nameOf(room, id) { const p = room.players.get(id); return p ? p.name : '?'; }
+function otherTeam(t) { return t === 'blue' ? 'red' : 'blue'; }
+function newTarget() { return 12 + Math.floor(Math.random() * 77); } // keeps ±10 on the dial
 
 function drawCard(s) {
   if (!s.deck.length) s.deck = shuffled(CARDS);
@@ -73,49 +78,83 @@ function canStart(room) {
 
 function create(room) {
   const mode = room.mode || 'teams';
-  const rounds = COOP_ROUND_OPTIONS.includes(room.coopRounds) ? room.coopRounds : 10;
+  const perPlayer = PROMPT_OPTIONS.includes(room.promptsEach) ? room.promptsEach : 3;
   const state = {
     mode,
-    phase: 'clue',
+    phase: 'write',
+    perPlayer,
     scores: mode === 'coop' ? { total: 0 } : { blue: 0, red: 0 },
     deck: shuffled(CARDS),
-    activeTeam: mode === 'coop' ? null : (Math.random() < 0.5 ? 'blue' : 'red'),
-    psychicIdx: { blue: -1, red: -1, all: -1 },
-    round: 0,
-    totalRounds: mode === 'coop' ? rounds : null,
-    recorded: false,
-    psychicId: null, card: null, target: null, clue: null,
-    dialPos: 50, counterVotes: {}, counterTie: false, counterGuess: null,
-    rerolls: { target: false, card: false },
-    result: null, winner: null,
+    assignments: {},
+    queue: [], qi: 0,
+    dialPos: 50,
+    counterVotes: {}, counterTie: false, counterGuess: null,
+    result: null,
+    nextReady: {},
+    winner: null, recorded: false, lbRank: null,
+    log: [],
   };
+  for (const p of allPlayers(room)) {
+    state.assignments[p.id] = Array.from({ length: perPlayer }, () => ({
+      card: drawCard(state), target: newTarget(), clue: null,
+      rerolls: { target: false, card: false },
+    }));
+  }
   room.state = state;
-  startRound(room);
   return state;
 }
 
-function startRound(room) {
+function everyoneWritten(room) {
   const s = room.state;
-  s.round += 1;
-  s.phase = 'clue';
-  s.clue = null;
-  s.dialPos = 50;
-  s.counterVotes = {};
-  s.counterTie = false;
-  s.counterGuess = null;
-  s.rerolls = { target: false, card: false };
-  s.result = null;
-  s.card = drawCard(s);
-  s.target = newTarget();
+  return allPlayers(room).every(p => (s.assignments[p.id] || []).every(a => a.clue));
+}
+
+function buildQueue(room) {
+  const s = room.state;
+  const entriesFor = pid => s.assignments[pid].map((_, idx) => ({ pid, idx }));
   if (s.mode === 'coop') {
-    const members = allPlayers(room);
-    s.psychicIdx.all = (s.psychicIdx.all + 1) % members.length;
-    s.psychicId = members[s.psychicIdx.all].id;
+    s.queue = shuffled(allPlayers(room).flatMap(p => entriesFor(p.id)));
   } else {
-    const members = teamMembers(room, s.activeTeam);
-    s.psychicIdx[s.activeTeam] = (s.psychicIdx[s.activeTeam] + 1) % members.length;
-    s.psychicId = members[s.psychicIdx[s.activeTeam]].id;
+    const blue = shuffled(teamMembers(room, 'blue').flatMap(p => entriesFor(p.id)));
+    const red = shuffled(teamMembers(room, 'red').flatMap(p => entriesFor(p.id)));
+    const first = Math.random() < 0.5 ? blue : red;
+    const second = first === blue ? red : blue;
+    const q = [];
+    const n = Math.max(first.length, second.length);
+    for (let i = 0; i < n; i++) {
+      if (first[i]) q.push(first[i]);
+      if (second[i]) q.push(second[i]);
+    }
+    s.queue = q;
   }
+  s.qi = 0;
+  s.phase = 'guess';
+  s.log.push(`all clues are in — ${s.queue.length} prompts to play!`);
+}
+
+function entry(s) { return s.queue[s.qi] || null; }
+function cur(s) {
+  const e = entry(s);
+  return e ? s.assignments[e.pid][e.idx] : null;
+}
+function writerId(s) { const e = entry(s); return e ? e.pid : null; }
+function writerTeam(room) {
+  const p = room.players.get(writerId(room.state));
+  return p ? p.team : null;
+}
+function connectedIds(room) {
+  return allPlayers(room).filter(p => p.connected).map(p => p.id);
+}
+
+function canGuess(room, player) {
+  const s = room.state;
+  if (s.phase !== 'guess') return false;
+  if (player.id === writerId(s)) return false;
+  if (s.mode === 'coop') return true;
+  const wt = writerTeam(room);
+  const mates = teamMembers(room, wt).filter(p => p.connected && p.id !== writerId(s));
+  if (mates.length === 0) return true; // nobody left on that team — anyone may guess
+  return player.team === wt;
 }
 
 function guessPoints(target, pos) {
@@ -124,18 +163,9 @@ function guessPoints(target, pos) {
   return 0;
 }
 
-function otherTeam(t) { return t === 'blue' ? 'red' : 'blue'; }
-
-function canGuess(s, player) {
-  if (player.id === s.psychicId) return false;
-  if (s.mode === 'coop') return true;
-  return player.team === s.activeTeam;
-}
-
 function handleDial(room, player, pos) {
   const s = room.state;
-  if (s.phase !== 'guess') return false;
-  if (!canGuess(s, player)) return false;
+  if (!canGuess(room, player)) return false;
   if (typeof pos !== 'number' || !isFinite(pos)) return false;
   s.dialPos = Math.max(0, Math.min(100, pos));
   return true;
@@ -145,133 +175,176 @@ function handleAction(room, player, msg) {
   const s = room.state;
   switch (msg.type) {
     case 'clue': {
-      if (s.phase !== 'clue' || player.id !== s.psychicId) return false;
+      if (s.phase !== 'write') return false;
+      const list = s.assignments[player.id];
+      const i = msg.idx;
+      if (!list || !list[i]) return false;
       const clue = String(msg.clue || '').trim().slice(0, 60);
       if (!clue) return false;
-      s.clue = clue;
-      s.phase = 'guess';
+      list[i].clue = clue;
+      if (everyoneWritten(room)) buildQueue(room);
       return true;
     }
     case 'reroll_target': {
-      if (s.phase !== 'clue' || player.id !== s.psychicId || s.rerolls.target) return false;
-      s.target = newTarget();
-      s.rerolls.target = true;
+      if (s.phase !== 'write') return false;
+      const a = (s.assignments[player.id] || [])[msg.idx];
+      if (!a || a.rerolls.target) return false;
+      a.target = newTarget();
+      a.rerolls.target = true;
+      a.clue = null;
       return true;
     }
     case 'reroll_card': {
-      if (s.phase !== 'clue' || player.id !== s.psychicId || s.rerolls.card) return false;
-      s.card = drawCard(s);
-      s.rerolls.card = true;
+      if (s.phase !== 'write') return false;
+      const a = (s.assignments[player.id] || [])[msg.idx];
+      if (!a || a.rerolls.card) return false;
+      a.card = drawCard(s);
+      a.rerolls.card = true;
+      a.clue = null;
       return true;
     }
     case 'lock': {
-      if (s.phase !== 'guess') return false;
-      if (!canGuess(s, player)) return false;
-      const pts = guessPoints(s.target, s.dialPos);
-      if (s.mode === 'coop') {
-        applyCoopScore(room, pts);
-      } else if (pts === 4) {
-        applyTeamScores(room, pts, null);
-      } else {
-        s.phase = 'counter';
-      }
+      if (s.phase !== 'guess' || !canGuess(room, player)) return false;
+      const c = cur(s);
+      const pts = guessPoints(c.target, s.dialPos);
+      if (s.mode === 'coop') { applyCoop(room, pts); return true; }
+      if (pts === 4) { applyTeams(room, pts, null); return true; }
+      s.phase = 'counter';
       return true;
     }
     case 'counter': {
-      if (s.mode === 'coop') return false;
-      if (s.phase !== 'counter') return false;
-      if (player.team !== otherTeam(s.activeTeam)) return false;
+      if (s.phase !== 'counter' || s.mode === 'coop') return false;
+      const opp = otherTeam(writerTeam(room));
+      if (player.team !== opp) return false;
       if (msg.dir !== 'left' && msg.dir !== 'right') return false;
       s.counterVotes[player.id] = msg.dir;
       s.counterTie = false;
-      const eligible = teamMembers(room, otherTeam(s.activeTeam)).filter(p => p.connected);
+      const eligible = teamMembers(room, opp).filter(p => p.connected);
       const votes = Object.values(s.counterVotes);
       if (votes.length < Math.max(1, eligible.length)) return true;
       const left = votes.filter(v => v === 'left').length;
       const right = votes.length - left;
-      if (left === right) {
-        s.counterVotes = {};
-        s.counterTie = true;
-        return true;
-      }
+      if (left === right) { s.counterVotes = {}; s.counterTie = true; return true; }
       const dir = left > right ? 'left' : 'right';
       s.counterGuess = dir;
-      const pts = guessPoints(s.target, s.dialPos);
-      const correct = dir === 'left' ? s.target < s.dialPos : s.target > s.dialPos;
-      applyTeamScores(room, pts, correct);
+      const c = cur(s);
+      const pts = guessPoints(c.target, s.dialPos);
+      const correct = dir === 'left' ? c.target < s.dialPos : c.target > s.dialPos;
+      applyTeams(room, pts, correct);
       return true;
     }
     case 'next': {
       if (s.phase !== 'reveal') return false;
-      if (s.mode !== 'coop') s.activeTeam = otherTeam(s.activeTeam);
-      startRound(room);
+      s.nextReady[player.id] = true;
+      const required = connectedIds(room).filter(id => id !== writerId(s));
+      if (required.length === 0 || required.every(id => s.nextReady[id])) advance(room);
       return true;
     }
     case 'rematch': {
-      if (s.phase !== 'gameover') return false;
-      if (player.id !== room.hostId) return false;
+      if (s.phase !== 'gameover' || player.id !== room.hostId) return false;
       if (canStart(room)) return false;
       create(room);
       return true;
     }
-    default:
-      return false;
+    default: return false;
   }
 }
 
-function applyCoopScore(room, pts) {
+function applyCoop(room, pts) {
   const s = room.state;
   s.scores.total += pts;
-  s.result = { guessPts: pts, counterPts: 0, counterCorrect: null, target: s.target };
-  s.phase = s.round >= s.totalRounds ? 'gameover' : 'reveal';
+  finishPrompt(room, { guessPts: pts, counterPts: 0, counterCorrect: null, target: cur(s).target });
 }
 
-function applyTeamScores(room, guessPts, counterCorrect) {
+function applyTeams(room, guessPts, counterCorrect) {
   const s = room.state;
+  const wt = writerTeam(room);
   const counterPts = counterCorrect === true ? 1 : 0;
-  s.scores[s.activeTeam] += guessPts;
-  s.scores[otherTeam(s.activeTeam)] += counterPts;
-  s.result = { guessPts, counterPts, counterCorrect, target: s.target };
-  if (s.scores.blue >= WIN_SCORE || s.scores.red >= WIN_SCORE) {
-    if (s.scores.blue !== s.scores.red) {
-      s.winner = s.scores.blue > s.scores.red ? 'blue' : 'red';
-      s.phase = 'gameover';
-      return;
-    }
-  }
+  s.scores[wt] += guessPts;
+  s.scores[otherTeam(wt)] += counterPts;
+  finishPrompt(room, { guessPts, counterPts, counterCorrect, target: cur(s).target });
+}
+
+function finishPrompt(room, result) {
+  const s = room.state;
+  s.result = result;
   s.phase = 'reveal';
+  s.nextReady = {};
+  s.log.push(`${nameOf(room, writerId(s))}: "${cur(s).clue}" → ${result.guessPts} pt${result.guessPts === 1 ? '' : 's'}${result.counterPts ? ' (+1 counter)' : ''}`);
+}
+
+function advance(room) {
+  const s = room.state;
+  s.qi += 1;
+  s.dialPos = 50;
+  s.counterVotes = {}; s.counterTie = false; s.counterGuess = null;
+  s.result = null;
+  s.nextReady = {};
+  if (s.qi >= s.queue.length) {
+    s.phase = 'gameover';
+    if (s.mode === 'teams') {
+      s.winner = s.scores.blue === s.scores.red ? 'draw' : (s.scores.blue > s.scores.red ? 'blue' : 'red');
+    }
+    return;
+  }
+  s.phase = 'guess';
 }
 
 function viewFor(room, player) {
   const s = room.state;
   const revealed = s.phase === 'reveal' || s.phase === 'gameover';
-  const isPsychic = player.id === s.psychicId;
-  const counterTeam = s.mode === 'teams' ? otherTeam(s.activeTeam) : null;
+  const e = entry(s);
+  const c = cur(s);
+  const isWriter = !!e && e.pid === player.id;
+  const wt = s.mode === 'teams' && e ? writerTeam(room) : null;
+  const counterTeam = wt ? otherTeam(wt) : null;
+  const required = e ? connectedIds(room).filter(id => id !== e.pid) : [];
+
   return {
     mode: s.mode,
     phase: s.phase,
+    perPlayer: s.perPlayer,
     scores: s.scores,
-    activeTeam: s.activeTeam,
-    round: s.round,
-    totalRounds: s.totalRounds,
     teamName: room.teamName || null,
-    psychicId: s.psychicId,
-    card: s.card,
-    clue: s.clue,
+    bands: BANDS,
+
+    yourPrompts: s.phase === 'write'
+      ? (s.assignments[player.id] || []).map(a => ({
+          card: a.card, target: a.target, clue: a.clue, rerolls: a.rerolls,
+        }))
+      : null,
+    writersDone: s.phase === 'write'
+      ? allPlayers(room).filter(p => (s.assignments[p.id] || []).every(a => a.clue)).length
+      : 0,
+    writersTotal: allPlayers(room).length,
+    youDone: s.phase === 'write'
+      ? (s.assignments[player.id] || []).every(a => a.clue)
+      : true,
+
+    promptNum: s.qi + 1,
+    promptTotal: s.queue.length,
+    writerId: e ? e.pid : null,
+    writerTeam: wt,
+    card: c ? c.card : null,
+    clue: c ? c.clue : null,
+    target: c && (isWriter || revealed) ? c.target : null,
     dialPos: s.dialPos,
+    youCanGuess: canGuess(room, player),
     counterGuess: s.counterGuess,
     counterTie: s.counterTie,
     votesIn: Object.keys(s.counterVotes).length,
     votesNeeded: counterTeam ? teamMembers(room, counterTeam).filter(p => p.connected).length : 0,
     youVoted: !!s.counterVotes[player.id],
-    rerolls: s.rerolls,
     result: revealed ? s.result : null,
+    readyIn: Object.keys(s.nextReady).filter(id => required.includes(id)).length,
+    readyNeeded: required.length,
+    youReady: !!s.nextReady[player.id],
+
     winner: s.winner,
     lbRank: s.lbRank || null,
-    target: (isPsychic || revealed) ? s.target : null,
-    winScore: WIN_SCORE,
-    bands: BANDS,
+    maxScore: s.queue.length * 4,
+    log: s.log.slice(-14),
   };
 }
 
-module.exports = { canStart, create, handleAction, handleDial, viewFor, COOP_ROUND_OPTIONS };
+module.exports = { canStart, create, handleAction, handleDial, viewFor, PROMPT_OPTIONS };
