@@ -186,7 +186,8 @@
           b.querySelector('button').onclick = () => act('unlock');
         } else {
           const b = p(`<button style="width:100%">🔒 Lock it in${g.locksNeeded > 1 ? ` (${g.locksIn}/${g.locksNeeded})` : ''}</button>`);
-          b.querySelector('button').onclick = () => { socket.emit('dial', { pos: localDial }); act('lock'); };
+          // NB: do not re-send the dial here — moving the dial clears everyone's locks
+          b.querySelector('button').onclick = () => act('lock');
         }
         if (g.lockedNames && g.lockedNames.length && g.locksNeeded > 1) {
           p(`<p style="color:var(--band2);font-size:.8rem">locked in: ${g.lockedNames.map(esc).join(', ')}</p>`);

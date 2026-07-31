@@ -181,8 +181,11 @@ function handleDial(room, player, pos) {
   const s = room.state;
   if (!canGuess(room, player)) return false;
   if (typeof pos !== 'number' || !isFinite(pos)) return false;
-  s.dialPos = Math.max(0, Math.min(100, pos));
-  // the dial moved — any locks are stale, everyone confirms again
+  const next = Math.max(0, Math.min(100, pos));
+  // ignore no-op updates: only a real move invalidates the locks
+  const moved = Math.abs(next - s.dialPos) > 0.05;
+  s.dialPos = next;
+  if (!moved) return { resetLocks: false };
   const had = Object.keys(s.locks).length > 0;
   if (had) s.locks = {};
   return { resetLocks: had };
