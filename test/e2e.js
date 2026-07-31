@@ -79,7 +79,8 @@ async function testTeams() {
   }
   console.log('teams: queue built, targets hidden');
 
-  let tieTested = false, readyTested = false, guard = 0;
+  let tieTested = false, guard = 0;
+  const writersSeen = [];
   while (states.Casper.game.phase !== 'gameover' && guard++ < 200) {
     g = states.Casper.game;
     const writer = byId(states, names, g.writerId);
@@ -89,6 +90,8 @@ async function testTeams() {
 
     if (g.phase === 'guess') {
       assert(states[writer].game.youCanGuess === false, 'writer cannot guess own clue');
+      const teamGuessers = names.filter(n => n !== writer && teamOf(n) === teamOf(writer));
+      assert(g.locksNeeded === teamGuessers.length, `locksNeeded should equal team guessers (${teamGuessers.length}), got ${g.locksNeeded}`);
       players[guesser].emit('dial', { pos: 20 + Math.random() * 60 });
       await wait(120);
       players[guesser].emit('action', { type: 'lock' });
@@ -108,21 +111,8 @@ async function testTeams() {
       players[counterers[1]].emit('action', { type: 'counter', dir });
       await wait(200);
     } else if (g.phase === 'reveal') {
-      const others = names.filter(n => n !== writer);
-      if (!readyTested) {
-        assert(g.readyNeeded === 3, 'ready needs all non-writers, got ' + g.readyNeeded);
-        players[others[0]].emit('action', { type: 'next' });
-        await wait(200);
-        assert(states.Casper.game.phase === 'reveal', 'one ready must NOT advance');
-        assert(states.Casper.game.readyIn === 1, 'ready counter shows 1');
-        // the writer pressing must not satisfy the requirement either
-        players[writer].emit('action', { type: 'next' });
-        await wait(200);
-        assert(states.Casper.game.phase === 'reveal', "writer's press must not advance");
-        readyTested = true;
-        console.log('teams: ready-check blocks early advance OK');
-      }
-      for (const n of others) { players[n].emit('action', { type: 'next' }); await wait(80); }
+      writersSeen.push(writer);
+      players[names.find(n => n !== writer)].emit('action', { type: 'next' });
       await wait(250);
     }
   }
@@ -130,6 +120,13 @@ async function testTeams() {
   assert(g.phase === 'gameover', 'game should finish, guard=' + guard);
   assert(['blue', 'red', 'draw'].includes(g.winner), 'winner decided: ' + g.winner);
   assert(g.promptNum > g.promptTotal || g.qi === undefined, 'all prompts played');
+  // rotation: the same person must never write two prompts in a row
+  const repeats = writersSeen.filter((w, i) => i > 0 && w === writersSeen[i - 1]);
+  assert(repeats.length === 0, 'writers must rotate, got ' + writersSeen.join(','));
+  // and teams must alternate
+  const teamSeq = writersSeen.map(n => states[n].players.find(p => p.id === states[n].you).team);
+  assert(!teamSeq.some((t, i) => i > 0 && t === teamSeq[i - 1]), 'teams must alternate: ' + teamSeq.join(','));
+  console.log('teams: writer rotation + team alternation OK (' + writersSeen.join(' → ') + ')');
   console.log(`teams: full game OK — ${g.scores.blue}-${g.scores.red}, winner ${g.winner}`);
   Object.values(players).forEach(p => p.disconnect());
 }
@@ -152,20 +149,36 @@ async function testCoop() {
   g = states.X.game;
   assert(g.phase === 'guess' && g.promptTotal === 9, 'coop queue = 9, got ' + g.promptTotal);
 
-  let guard = 0;
+  let guard = 0, resetTested = false;
+  const coopWriters = [];
   while (states.X.game.phase !== 'gameover' && guard++ < 100) {
     g = states.X.game;
     const writer = byId(states, names, g.writerId);
     const others = names.filter(n => n !== writer);
     if (g.phase === 'guess') {
-      // aim near the target using the writer's own view
+      assert(g.locksNeeded === 2, 'coop: both non-writers must lock, got ' + g.locksNeeded);
       const target = states[writer].game.target;
       players[others[0]].emit('dial', { pos: Math.max(0, Math.min(100, target + (Math.random() * 6 - 3))) });
       await wait(120);
       players[others[0]].emit('action', { type: 'lock' });
       await wait(200);
+      assert(states.X.game.phase === 'guess', 'one lock must not resolve the guess');
+      assert(states.X.game.locksIn === 1, 'locksIn should be 1, got ' + states.X.game.locksIn);
+      if (!resetTested) {
+        // someone nudges the dial -> every lock clears
+        players[others[1]].emit('dial', { pos: 55 });
+        await wait(250);
+        assert(states.X.game.locksIn === 0, 'moving the dial must clear locks, got ' + states.X.game.locksIn);
+        players[others[0]].emit('action', { type: 'lock' });
+        await wait(150);
+        resetTested = true;
+        console.log('coop: dial move clears locks OK');
+      }
+      players[others[1]].emit('action', { type: 'lock' });
+      await wait(250);
     } else if (g.phase === 'reveal') {
-      for (const n of others) { players[n].emit('action', { type: 'next' }); await wait(80); }
+      coopWriters.push(writer);
+      players[others[0]].emit('action', { type: 'next' });
       await wait(200);
     }
   }
@@ -176,6 +189,9 @@ async function testCoop() {
   assert(typeof g.lbRank === 'number', 'leaderboard rank recorded');
   const lb = await fetch(`${URL}/leaderboard?prompts=3`).then(r => r.json());
   assert(lb.top.some(e => e.name === 'Testtelepaterne'), 'leaderboard entry saved');
+  assert(!coopWriters.some((w, i) => i > 0 && w === coopWriters[i - 1]), 'coop writers rotate: ' + coopWriters.join(','));
+  assert(coopWriters.slice(0, 3).join(',') === coopWriters.slice(3, 6).join(','), 'rotation repeats in the same order: ' + coopWriters.join(','));
+  console.log('coop: writer rotation OK (' + coopWriters.join(' → ') + ')');
   console.log(`coop: full game OK — ${g.scores.total}/${g.maxScore}, rank #${g.lbRank}, leaderboard OK`);
   Object.values(players).forEach(p => p.disconnect());
 }

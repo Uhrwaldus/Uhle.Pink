@@ -278,9 +278,12 @@ io.on('connection', (socket) => {
   socket.on('dial', ({ pos }) => {
     if (!room || !player || !room.state) return;
     const game = GAMES[room.gameName];
-    if (game.handleDial && game.handleDial(room, player, pos)) {
-      socket.to(room.code).emit('dial', { pos: room.state.dialPos, by: player.name });
-    }
+    if (!game.handleDial) return;
+    const res = game.handleDial(room, player, pos);
+    if (!res) return;
+    socket.to(room.code).emit('dial', { pos: room.state.dialPos, by: player.name });
+    // moving the dial invalidated everyone's lock — push the full state
+    if (res.resetLocks) broadcast(room);
   });
 
   socket.on('disconnect', () => {

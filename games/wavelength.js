@@ -6,6 +6,8 @@
 //
 // Scoring bands are equal width around the target:
 //   |diff| <= 2 -> 4 pts,  <= 6 -> 3 pts,  <= 10 -> 2 pts
+// Every eligible guesser must lock in before the guess resolves; moving the dial
+// clears all locks so the group has to re-confirm the new position.
 // Teams mode: a non-bullseye guess lets the other team vote left/right for +1.
 // The game ends when every prompt has been played; highest score wins.
 
@@ -90,7 +92,7 @@ function create(room) {
     dialPos: 50,
     counterVotes: {}, counterTie: false, counterGuess: null,
     result: null,
-    nextReady: {},
+    locks: {},
     winner: null, recorded: false, lbRank: null,
     log: [],
   };
@@ -109,19 +111,26 @@ function everyoneWritten(room) {
   return allPlayers(room).every(p => (s.assignments[p.id] || []).every(a => a.clue));
 }
 
+// Players take turns in a fixed rotation: everyone's 1st clue, then everyone's
+// 2nd, and so on — so the writer changes every prompt.
+function rotate(players, perPlayer) {
+  const q = [];
+  for (let r = 0; r < perPlayer; r++) for (const p of players) q.push({ pid: p.id, idx: r });
+  return q;
+}
+
 function buildQueue(room) {
   const s = room.state;
-  const entriesFor = pid => s.assignments[pid].map((_, idx) => ({ pid, idx }));
   if (s.mode === 'coop') {
-    s.queue = shuffled(allPlayers(room).flatMap(p => entriesFor(p.id)));
+    s.queue = rotate(allPlayers(room), s.perPlayer);
   } else {
-    const blue = shuffled(teamMembers(room, 'blue').flatMap(p => entriesFor(p.id)));
-    const red = shuffled(teamMembers(room, 'red').flatMap(p => entriesFor(p.id)));
+    // rotate within each team, then alternate the teams
+    const blue = rotate(teamMembers(room, 'blue'), s.perPlayer);
+    const red = rotate(teamMembers(room, 'red'), s.perPlayer);
     const first = Math.random() < 0.5 ? blue : red;
     const second = first === blue ? red : blue;
     const q = [];
-    const n = Math.max(first.length, second.length);
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < Math.max(first.length, second.length); i++) {
       if (first[i]) q.push(first[i]);
       if (second[i]) q.push(second[i]);
     }
@@ -157,6 +166,11 @@ function canGuess(room, player) {
   return player.team === wt;
 }
 
+// Everyone who is allowed to move the dial must also lock in.
+function lockers(room) {
+  return allPlayers(room).filter(p => p.connected && canGuess(room, p)).map(p => p.id);
+}
+
 function guessPoints(target, pos) {
   const d = Math.abs(target - pos);
   for (const [width, pts] of BANDS) if (d <= width) return pts;
@@ -168,7 +182,10 @@ function handleDial(room, player, pos) {
   if (!canGuess(room, player)) return false;
   if (typeof pos !== 'number' || !isFinite(pos)) return false;
   s.dialPos = Math.max(0, Math.min(100, pos));
-  return true;
+  // the dial moved — any locks are stale, everyone confirms again
+  const had = Object.keys(s.locks).length > 0;
+  if (had) s.locks = {};
+  return { resetLocks: had };
 }
 
 function handleAction(room, player, msg) {
@@ -205,11 +222,19 @@ function handleAction(room, player, msg) {
     }
     case 'lock': {
       if (s.phase !== 'guess' || !canGuess(room, player)) return false;
+      s.locks[player.id] = true;
+      const need = lockers(room);
+      if (!need.every(id => s.locks[id])) return true; // still waiting on someone
       const c = cur(s);
       const pts = guessPoints(c.target, s.dialPos);
       if (s.mode === 'coop') { applyCoop(room, pts); return true; }
       if (pts === 4) { applyTeams(room, pts, null); return true; }
       s.phase = 'counter';
+      return true;
+    }
+    case 'unlock': {
+      if (s.phase !== 'guess' || !s.locks[player.id]) return false;
+      delete s.locks[player.id];
       return true;
     }
     case 'counter': {
@@ -235,9 +260,7 @@ function handleAction(room, player, msg) {
     }
     case 'next': {
       if (s.phase !== 'reveal') return false;
-      s.nextReady[player.id] = true;
-      const required = connectedIds(room).filter(id => id !== writerId(s));
-      if (required.length === 0 || required.every(id => s.nextReady[id])) advance(room);
+      advance(room);
       return true;
     }
     case 'rematch': {
@@ -269,7 +292,7 @@ function finishPrompt(room, result) {
   const s = room.state;
   s.result = result;
   s.phase = 'reveal';
-  s.nextReady = {};
+  s.locks = {};
   s.log.push(`${nameOf(room, writerId(s))}: "${cur(s).clue}" → ${result.guessPts} pt${result.guessPts === 1 ? '' : 's'}${result.counterPts ? ' (+1 counter)' : ''}`);
 }
 
@@ -279,7 +302,7 @@ function advance(room) {
   s.dialPos = 50;
   s.counterVotes = {}; s.counterTie = false; s.counterGuess = null;
   s.result = null;
-  s.nextReady = {};
+  s.locks = {};
   if (s.qi >= s.queue.length) {
     s.phase = 'gameover';
     if (s.mode === 'teams') {
@@ -298,7 +321,7 @@ function viewFor(room, player) {
   const isWriter = !!e && e.pid === player.id;
   const wt = s.mode === 'teams' && e ? writerTeam(room) : null;
   const counterTeam = wt ? otherTeam(wt) : null;
-  const required = e ? connectedIds(room).filter(id => id !== e.pid) : [];
+  const need = s.phase === 'guess' ? lockers(room) : [];
 
   return {
     mode: s.mode,
@@ -336,9 +359,10 @@ function viewFor(room, player) {
     votesNeeded: counterTeam ? teamMembers(room, counterTeam).filter(p => p.connected).length : 0,
     youVoted: !!s.counterVotes[player.id],
     result: revealed ? s.result : null,
-    readyIn: Object.keys(s.nextReady).filter(id => required.includes(id)).length,
-    readyNeeded: required.length,
-    youReady: !!s.nextReady[player.id],
+    locksIn: need.filter(id => s.locks[id]).length,
+    locksNeeded: need.length,
+    youLocked: !!s.locks[player.id],
+    lockedNames: need.filter(id => s.locks[id]).map(id => nameOf(room, id)),
 
     winner: s.winner,
     lbRank: s.lbRank || null,

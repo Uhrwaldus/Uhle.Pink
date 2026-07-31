@@ -176,10 +176,23 @@
     if (g.phase === 'guess') {
       if (g.youCanGuess) {
         p(`<p class="big">Drag the dial to where <b>"${esc(g.clue)}"</b> lands. Talk it out!</p>`);
-        const b = p(`<button style="width:100%">🔒 Lock it in</button>`);
-        b.querySelector('button').onclick = () => { socket.emit('dial', { pos: localDial }); act('lock'); };
+        if (g.locksNeeded > 1) {
+          p(`<p style="color:var(--muted);font-size:.8rem">everyone guessing must lock in — moving the dial resets it</p>`);
+        }
+        if (g.youLocked) {
+          const b = p(`<button class="secondary" style="width:100%">🔓 Locked ✔ ${g.locksIn}/${g.locksNeeded} — tap to unlock</button>`);
+          b.querySelector('button').onclick = () => act('unlock');
+        } else {
+          const b = p(`<button style="width:100%">🔒 Lock it in${g.locksNeeded > 1 ? ` (${g.locksIn}/${g.locksNeeded})` : ''}</button>`);
+          b.querySelector('button').onclick = () => { socket.emit('dial', { pos: localDial }); act('lock'); };
+        }
+        if (g.lockedNames && g.lockedNames.length && g.locksNeeded > 1) {
+          p(`<p style="color:var(--band2);font-size:.8rem">locked in: ${g.lockedNames.map(esc).join(', ')}</p>`);
+        }
       } else if (isWriter) {
-        p(`<p class="big">Your clue is up — 🤐 no hints!</p><p class="psychic-note">not even facial expressions 👀</p>`);
+        p(`<p class="big">Your clue is up — 🤐 no hints!</p>
+           ${g.locksNeeded > 1 ? `<p style="color:var(--muted);font-size:.8rem">${g.locksIn}/${g.locksNeeded} locked in</p>` : ''}
+           <p class="psychic-note">not even facial expressions 👀</p>`);
       } else {
         p(`<p class="big">${g.mode === 'coop' ? 'The others are guessing…' : `${teamLabel(g.writerTeam)} team is guessing. Get ready to counter!`}</p>`);
       }
@@ -212,14 +225,8 @@
         }
         p(html);
       }
-      if (isWriter) {
-        p(`<p style="color:var(--muted)">waiting for the others… (${g.readyIn}/${g.readyNeeded} ready)</p>`);
-      } else if (g.youReady) {
-        p(`<p class="big">Ready ✔ — waiting for the rest (${g.readyIn}/${g.readyNeeded})</p>`);
-      } else {
-        const b = p(`<button style="width:100%">Next prompt ▶ (${g.readyIn}/${g.readyNeeded} ready)</button>`);
-        b.querySelector('button').onclick = () => act('next');
-      }
+      const b = p(`<button style="width:100%">${g.promptNum >= g.promptTotal ? 'Final scores ▶' : 'Next prompt ▶'}</button>`);
+      b.querySelector('button').onclick = () => act('next');
     }
     if (g.phase === 'gameover') {
       if (g.mode === 'coop') {
