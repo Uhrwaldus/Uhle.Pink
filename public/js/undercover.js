@@ -93,15 +93,19 @@
     root.innerHTML = `<div class="ll-layout">${refPanel()}<div class="ll-main">${html}</div>${logPanel(g)}</div>`;
     const db = root.querySelector('#uc-desc-btn');
     if (db) db.onclick = () => {
-      const t = root.querySelector('#uc-desc').value.trim();
+      const el = root.querySelector('#uc-desc');
+      const t = el.value.trim();
       if (!t) return toast('Say something!');
+      el.blur();
       act('describe', { text: t });
     };
     root.querySelectorAll('[data-vote]').forEach(b => b.onclick = () => act('vote', { pid: b.dataset.vote }));
     const gb = root.querySelector('#uc-guess-btn');
     if (gb) gb.onclick = () => {
-      const w = root.querySelector('#uc-guess').value.trim();
+      const el = root.querySelector('#uc-guess');
+      const w = el.value.trim();
       if (!w) return toast('Type your guess');
+      el.blur();
       act('white_guess', { word: w });
     };
     const _e = root.querySelector('.ll-log-box .entries');

@@ -491,7 +491,24 @@ function renderGame() {
   $('btn-lobby').style.display = isHost() ? '' : 'none';
   $('btn-lobby').textContent = over ? '⬅ Back to lobby — pick the next game' : '⬅ Back to lobby (abandon game)';
   if (!ui) { root.innerHTML = '<p>Unknown game…</p>'; return; }
+
+  // Someone else's update must never wipe what you're typing: remember the
+  // focused field (text + caret) and put it back after the re-render.
+  const el = document.activeElement;
+  const keep = (el && el.tagName === 'INPUT' && el.id && root.contains(el))
+    ? { id: el.id, value: el.value, start: el.selectionStart, end: el.selectionEnd }
+    : null;
+
   ui.render(root, S);
+
+  if (keep) {
+    const n = document.getElementById(keep.id);
+    if (n) {
+      n.value = keep.value;
+      n.focus();
+      try { n.setSelectionRange(keep.start, keep.end); } catch {}
+    }
+  }
 }
 function rematchRow(host) {
   return host

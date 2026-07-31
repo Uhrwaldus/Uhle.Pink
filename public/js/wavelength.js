@@ -138,8 +138,10 @@
     box.querySelector('#rr-t').onclick = () => act('reroll_target', { idx: writeIdx });
     box.querySelector('#rr-c').onclick = () => act('reroll_card', { idx: writeIdx });
     box.querySelector('#wl-clue-btn').onclick = () => {
-      const clue = box.querySelector('#wl-clue-in').value.trim();
+      const input = box.querySelector('#wl-clue-in');
+      const clue = input.value.trim();
       if (!clue) return toast('Write a clue first');
+      input.blur(); // this field is finished — don't restore it into the next prompt
       act('clue', { idx: writeIdx, clue });
       const nextEmpty = list.findIndex((p, i) => i !== writeIdx && !p.clue);
       if (nextEmpty >= 0) writeIdx = nextEmpty;

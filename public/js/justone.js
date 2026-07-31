@@ -73,15 +73,19 @@
     root.innerHTML = `<div class="ll-layout">${refPanel()}<div class="ll-main">${html}</div>${logPanel(g)}</div>`;
     const cb = root.querySelector('#jo-clue-btn');
     if (cb) cb.onclick = () => {
-      const w = root.querySelector('#jo-clue').value.trim();
+      const el = root.querySelector('#jo-clue');
+      const w = el.value.trim();
       if (!w) return toast('Write a clue');
       if (w.includes(' ')) return toast('ONE word only!');
+      el.blur();
       act('clue', { word: w });
     };
     const gb = root.querySelector('#jo-guess-btn');
     if (gb) gb.onclick = () => {
-      const w = root.querySelector('#jo-guess').value.trim();
+      const el = root.querySelector('#jo-guess');
+      const w = el.value.trim();
       if (!w) return toast('Type a guess');
+      el.blur();
       act('guess', { word: w });
     };
     const pass = root.querySelector('#jo-pass');

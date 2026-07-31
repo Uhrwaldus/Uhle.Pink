@@ -62,9 +62,11 @@
     root.querySelectorAll('[data-i]').forEach(b => b.onclick = () => act('pick', { i: +b.dataset.i }));
     const give = root.querySelector('#cn-give');
     if (give) give.onclick = () => {
-      const word = root.querySelector('#cn-word').value.trim();
+      const el = root.querySelector('#cn-word');
+      const word = el.value.trim();
       const num = +root.querySelector('#cn-num').value;
       if (!word) return toast('Write a clue word');
+      el.blur();
       act('clue', { word, num });
     };
     const stop = root.querySelector('#cn-stop');
