@@ -14,34 +14,81 @@
 const BANDS = [[2, 4], [6, 3], [10, 2]];
 const PROMPT_OPTIONS = [3, 4, 5];
 
-const CARDS = [
-  ['Hot', 'Cold'], ['Underrated', 'Overrated'], ['Scary', 'Not scary'],
-  ['Round', 'Pointy'], ['Smells bad', 'Smells good'], ['Rare', 'Common'],
-  ['Useless', 'Useful'], ['Guilty pleasure', 'Openly love it'],
-  ['Bad habit', 'Good habit'], ['Loud', 'Quiet'], ['Fantasy', 'Sci-Fi'],
-  ['Dry', 'Wet'], ['Job', 'Career'], ['Normal', 'Weird'],
-  ['Villain', 'Hero'], ['Cheap', 'Expensive'], ['Boring', 'Exciting'],
-  ['Dangerous', 'Safe'], ['Old-fashioned', 'Futuristic'], ['Ugly', 'Beautiful'],
-  ['Hard to spell', 'Easy to spell'], ['Introvert', 'Extrovert'],
-  ['Bad movie', 'Good movie'], ['Underpaid', 'Overpaid'],
-  ['Snack', 'Meal'], ['Sport', 'Game'], ['Casual', 'Formal'],
-  ['Soft', 'Hard'], ['Small talk topic', 'Deep conversation topic'],
-  ['Easy to kill', 'Hard to kill (a plant)'], ['Bad pizza topping', 'Good pizza topping'],
-  ['Dog person thing', 'Cat person thing'], ['Overpriced', 'Worth every penny'],
-  ['Historically important', 'Historically irrelevant'], ['Low calorie', 'High calorie'],
-  ['Bad superpower', 'Good superpower'], ['Mild', 'Spicy'],
-  ['Forgettable', 'Unforgettable'], ['Sad song', 'Happy song'],
-  ['Requires luck', 'Requires skill'], ['Temporary', 'Permanent'],
-  ['Bad gift', 'Good gift'], ['For kids', 'For adults'],
-  ['Feels illegal', 'Feels legal'], ['Comfortable', 'Uncomfortable'],
-  ['Book was better', 'Movie was better'], ['Morning person activity', 'Night owl activity'],
-  ['Bad first date idea', 'Good first date idea'], ['Fragile', 'Durable'],
-  ['Traditional', 'Modern'], ['Unhealthy', 'Healthy'], ['Mainstream', 'Niche'],
-  ['Bad roommate trait', 'Good roommate trait'], ['Slow', 'Fast'],
-  ['Bad advice', 'Good advice'], ['Vegetable', 'Fruit'],
-  ['Waste of time', 'Great use of time'], ['Quiet hobby', 'Loud hobby'],
-  ['Easy instrument', 'Hard instrument'], ['Sandwich', 'Not a sandwich'],
+const PACKS = [
+  { id: 'sensory', name: 'Sensory', emoji: '\u{1F321}\uFE0F' },
+  { id: 'takes',   name: 'Hot takes', emoji: '\u{1F525}' },
+  { id: 'food',    name: 'Food', emoji: '\u{1F355}' },
+  { id: 'pop',     name: 'Pop culture', emoji: '\u{1F3AC}' },
+  { id: 'life',    name: 'Life & people', emoji: '\u{1F91D}' },
+  { id: 'mixed',   name: 'Mixed bag', emoji: '\u{1F3B2}' },
 ];
+
+// Cards grouped by pack. To add one: drop a ['Left', 'Right'] pair into a pack.
+// (Ids are derived from the wording, so rewording a card resets its on/off toggle.)
+const PACK_CARDS = {
+  sensory: [
+    ['Hot', 'Cold'], ['Round', 'Pointy'], ['Dry', 'Wet'], ['Loud', 'Quiet'],
+    ['Soft', 'Hard'], ['Slow', 'Fast'], ['Fragile', 'Durable'],
+    ['Comfortable', 'Uncomfortable'], ['Mild', 'Spicy'],
+    ['Smells bad', 'Smells good'], ['Scary', 'Not scary'],
+  ],
+  takes: [
+    ['Underrated', 'Overrated'], ['Guilty pleasure', 'Openly love it'],
+    ['Boring', 'Exciting'], ['Ugly', 'Beautiful'],
+    ['Forgettable', 'Unforgettable'], ['Mainstream', 'Niche'],
+    ['Overpriced', 'Worth every penny'], ['Cheap', 'Expensive'],
+    ['Useless', 'Useful'],
+  ],
+  food: [
+    ['Snack', 'Meal'], ['Bad pizza topping', 'Good pizza topping'],
+    ['Low calorie', 'High calorie'], ['Vegetable', 'Fruit'],
+    ['Sandwich', 'Not a sandwich'], ['Unhealthy', 'Healthy'],
+  ],
+  pop: [
+    ['Fantasy', 'Sci-Fi'], ['Villain', 'Hero'], ['Bad movie', 'Good movie'],
+    ['Book was better', 'Movie was better'], ['Sad song', 'Happy song'],
+    ['Bad superpower', 'Good superpower'],
+  ],
+  life: [
+    ['Introvert', 'Extrovert'], ['Job', 'Career'], ['Bad habit', 'Good habit'],
+    ['Small talk topic', 'Deep conversation topic'],
+    ['Bad first date idea', 'Good first date idea'],
+    ['Bad roommate trait', 'Good roommate trait'],
+    ['Morning person activity', 'Night owl activity'],
+    ['Dog person thing', 'Cat person thing'], ['For kids', 'For adults'],
+    ['Casual', 'Formal'], ['Bad gift', 'Good gift'], ['Bad advice', 'Good advice'],
+    ['Waste of time', 'Great use of time'], ['Quiet hobby', 'Loud hobby'],
+    ['Underpaid', 'Overpaid'], ['Requires luck', 'Requires skill'],
+  ],
+  mixed: [
+    ['Rare', 'Common'], ['Normal', 'Weird'], ['Dangerous', 'Safe'],
+    ['Old-fashioned', 'Futuristic'], ['Traditional', 'Modern'],
+    ['Temporary', 'Permanent'], ['Hard to spell', 'Easy to spell'],
+    ['Historically important', 'Historically irrelevant'],
+    ['Feels illegal', 'Feels legal'], ['Easy to kill', 'Hard to kill (a plant)'],
+    ['Sport', 'Game'], ['Easy instrument', 'Hard instrument'],
+  ],
+};
+
+function slug(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+// Flat catalogue: { id, left, right, pack }
+const CARDS = [];
+for (const pack of PACKS) {
+  for (const [left, right] of PACK_CARDS[pack.id] || []) {
+    CARDS.push({ id: slug(left) + '_' + slug(right), left, right, pack: pack.id });
+  }
+}
+
+// Cards the host has switched off are filtered out; if that leaves nothing,
+// fall back to the full set rather than dealing an empty deck.
+function allowedCards(room) {
+  const off = new Set(Array.isArray(room && room.wlDisabled) ? room.wlDisabled : []);
+  const keep = CARDS.filter(c => !off.has(c.id));
+  return (keep.length ? keep : CARDS).map(c => [c.left, c.right]);
+}
 
 function shuffled(arr) {
   const a = arr.slice();
@@ -61,7 +108,7 @@ function otherTeam(t) { return t === 'blue' ? 'red' : 'blue'; }
 function newTarget() { return 12 + Math.floor(Math.random() * 77); } // keeps ±10 on the dial
 
 function drawCard(s) {
-  if (!s.deck.length) s.deck = shuffled(CARDS);
+  if (!s.deck.length) s.deck = shuffled(s.pool || CARDS.map(c => [c.left, c.right]));
   return s.deck.pop();
 }
 
@@ -81,12 +128,14 @@ function canStart(room) {
 function create(room) {
   const mode = room.mode || 'teams';
   const perPlayer = PROMPT_OPTIONS.includes(room.promptsEach) ? room.promptsEach : 3;
+  const pool = allowedCards(room);
   const state = {
     mode,
     phase: 'write',
     perPlayer,
+    pool,
     scores: mode === 'coop' ? { total: 0 } : { blue: 0, red: 0 },
-    deck: shuffled(CARDS),
+    deck: shuffled(pool),
     assignments: {},
     queue: [], qi: 0,
     dialPos: 50,
@@ -374,4 +423,4 @@ function viewFor(room, player) {
   };
 }
 
-module.exports = { canStart, create, handleAction, handleDial, viewFor, PROMPT_OPTIONS };
+module.exports = { canStart, create, handleAction, handleDial, viewFor, PROMPT_OPTIONS, CARDS, PACKS };

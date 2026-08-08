@@ -84,6 +84,12 @@ app.get('/busy', (req, res) => {
   res.json({ busy });
 });
 
+// Wavelength card catalogue — the lobby card picker reads this.
+app.get('/wavelength-cards', (req, res) => {
+  const wl = GAMES.wavelength;
+  res.json({ packs: wl.PACKS, cards: wl.CARDS });
+});
+
 app.get('/leaderboard', (req, res) => {
   const prompts = parseInt(req.query.prompts || req.query.rounds, 10);
   const bracket = leaderboard[prompts] || [];
@@ -116,6 +122,7 @@ function broadcast(room) {
       gameName: room.gameName,
       mode: room.mode || 'teams',
       promptsEach: room.promptsEach || 3,
+      wlDisabled: room.wlDisabled || [],
       teamName: room.teamName || '',
       players: publicPlayers(room),
       game: room.state ? game.viewFor(room, p) : null,
@@ -227,6 +234,19 @@ io.on('connection', (socket) => {
     if (![3, 4, 5].includes(prompts)) return;
     if (!inLobby(room)) return;
     room.promptsEach = prompts;
+    broadcast(room);
+  });
+
+  // Host switches individual spectrum cards off. Kept per-room; the host's
+  // browser remembers the list and re-sends it whenever they open a lobby.
+  socket.on('set_wl_cards', ({ disabled }) => {
+    if (!room || !player || player.id !== room.hostId) return;
+    if (!inLobby(room)) return;
+    if (!Array.isArray(disabled)) return;
+    room.wlDisabled = disabled
+      .filter(id => typeof id === 'string')
+      .map(id => id.slice(0, 80))
+      .slice(0, 500);
     broadcast(room);
   });
 

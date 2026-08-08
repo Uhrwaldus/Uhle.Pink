@@ -93,6 +93,44 @@
   }
   .toast.show { opacity: 1; }
 
+  /* card picker (wavelength spectrum packs) */
+  .pack-row { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; margin-bottom: 8px; }
+  .pack-chip {
+    display: flex; align-items: center; gap: 6px; background: var(--panel2);
+    border: 1px solid #3a4057; border-radius: 999px; padding: 6px 6px 6px 12px;
+    font-size: .8rem; white-space: nowrap;
+  }
+  .pack-chip.empty { opacity: .5; }
+  .pack-chip .pcount { color: var(--muted); font-size: .72rem; }
+  .pack-chip button { padding: 4px 10px; font-size: .72rem; border-radius: 999px; background: #3a4057; }
+  .pack-note { font-size: .75rem; color: var(--muted); text-align: center; margin-bottom: 10px; }
+  .pack-note.warn { color: var(--band3); }
+
+  .modal-back {
+    position: fixed; inset: 0; background: rgba(8,9,14,.72); z-index: 60;
+    display: none; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-back.show { display: flex; }
+  .modal {
+    background: var(--panel); border-radius: var(--radius); width: 100%; max-width: 560px;
+    max-height: 86vh; display: flex; flex-direction: column; box-shadow: 0 12px 50px rgba(0,0,0,.55);
+  }
+  .modal-head { padding: 14px 16px; border-bottom: 1px solid #ffffff14; display: flex; align-items: center; gap: 10px; }
+  .modal-head h3 { font-size: 1.05rem; flex: 1; }
+  .modal-head button { padding: 6px 12px; font-size: .78rem; background: #3a4057; }
+  .modal-body { padding: 14px 16px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+  .modal-foot { padding: 12px 16px; border-top: 1px solid #ffffff14; display: flex; gap: 8px; align-items: center; }
+  .modal-foot .spacer { flex: 1; color: var(--muted); font-size: .78rem; }
+  .card-pill {
+    background: var(--panel2); border: 1px solid #3a4057; border-radius: 999px;
+    padding: 8px 13px; font-size: .82rem; cursor: pointer; user-select: none;
+    transition: opacity .12s, border-color .12s;
+  }
+  .card-pill:hover { border-color: var(--band2); }
+  .card-pill.off { opacity: .38; border-color: #3a4057; text-decoration: line-through; }
+  .card-pill.readonly { cursor: default; }
+  .card-pill.readonly:hover { border-color: #3a4057; }
+
   /* wavelength */
   .scorebar { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; }
   .score { font-size: 1.5rem; font-weight: 800; padding: 4px 14px; border-radius: 10px; }
@@ -239,6 +277,22 @@
 <div class="screen" id="scr-game">
   <div class="card" id="game-root"></div>
   <button id="btn-lobby" class="secondary" style="margin-top:10px;display:none;padding:8px 16px;font-size:.85rem">⬅ Back to lobby</button>
+</div>
+
+<div class="modal-back" id="wl-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="wl-modal-title">Pack</h3>
+      <button id="wl-all-on">all on</button>
+      <button id="wl-all-off">all off</button>
+      <button id="wl-close">✕</button>
+    </div>
+    <div class="modal-body" id="wl-modal-body"></div>
+    <div class="modal-foot">
+      <span class="spacer" id="wl-modal-count"></span>
+      <button id="wl-done">Done</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -406,6 +460,117 @@ function usesTeams() {
   return S.gameName === 'codenames' || (S.gameName === 'wavelength' && S.mode !== 'coop');
 }
 
+// ---------- wavelength card picker ----------
+// The catalogue lives on the server; which cards are switched off lives in THIS
+// browser (localStorage) and is pushed to the room whenever the host is in a lobby.
+const WL_KEY = 'wl.disabledCards';
+let WL_CAT = null;         // { packs, cards } once fetched
+let wlModalPack = null;    // pack id currently open in the popup
+
+function wlOff() {
+  try { const v = JSON.parse(localStorage.getItem(WL_KEY)); return Array.isArray(v) ? v : []; }
+  catch { return []; }
+}
+function wlSetOff(list) {
+  try { localStorage.setItem(WL_KEY, JSON.stringify(list)); } catch {}
+  socket.emit('set_wl_cards', { disabled: list });
+}
+function wlToggle(id) {
+  const list = wlOff();
+  const i = list.indexOf(id);
+  if (i === -1) list.push(id); else list.splice(i, 1);
+  wlSetOff(list);
+  renderWlPacks();
+  if (wlModalPack) renderWlModal();
+}
+function wlLoadCatalogue(then) {
+  if (WL_CAT) return then && then();
+  fetch('/wavelength-cards').then(r => r.json()).then(d => { WL_CAT = d; then && then(); })
+    .catch(() => toast('Could not load the card list'));
+}
+function wlPackCards(packId) {
+  return (WL_CAT ? WL_CAT.cards : []).filter(c => c.pack === packId);
+}
+function wlEnabledCount() {
+  const off = new Set(wlOff());
+  return (WL_CAT ? WL_CAT.cards : []).filter(c => !off.has(c.id)).length;
+}
+
+function renderWlPacks() {
+  const box = $('wl-packs');
+  if (!box) return;
+  if (!WL_CAT) { box.innerHTML = ''; return; }
+  const host = isHost();
+  const off = new Set(host ? wlOff() : (S.wlDisabled || []));
+  const total = WL_CAT.cards.length;
+  const on = WL_CAT.cards.filter(c => !off.has(c.id)).length;
+  const needed = (S.players ? S.players.length : 1) * (S.promptsEach || 3);
+
+  if (!host) {
+    box.innerHTML = `<div class="pack-note">🃏 ${on} of ${total} spectrum cards in play</div>`;
+    return;
+  }
+  const chips = WL_CAT.packs.map(p => {
+    const cards = wlPackCards(p.id);
+    const live = cards.filter(c => !off.has(c.id)).length;
+    return `<div class="pack-chip${live ? '' : ' empty'}">
+        <span>${p.emoji} ${esc(p.name)}</span>
+        <span class="pcount">${live}/${cards.length}</span>
+        <button data-pack="${p.id}">see cards</button>
+      </div>`;
+  }).join('');
+  const short = on < needed;
+  box.innerHTML = `
+    <div style="font-size:.75rem;color:var(--muted);text-align:center;margin-bottom:6px">spectrum cards</div>
+    <div class="pack-row">${chips}</div>
+    <div class="pack-note${short ? ' warn' : ''}">
+      ${short
+        ? `⚠️ only ${on} cards on — ${S.players.length} players × ${S.promptsEach || 3} clues needs ${needed}, so some will repeat`
+        : `🃏 ${on} of ${total} cards in play`}
+    </div>`;
+  box.querySelectorAll('[data-pack]').forEach(b => b.onclick = () => openWlModal(b.dataset.pack));
+}
+
+function openWlModal(packId) {
+  wlModalPack = packId;
+  renderWlModal();
+  $('wl-modal').classList.add('show');
+}
+function closeWlModal() {
+  wlModalPack = null;
+  $('wl-modal').classList.remove('show');
+}
+function renderWlModal() {
+  const pack = WL_CAT.packs.find(p => p.id === wlModalPack);
+  if (!pack) return closeWlModal();
+  const host = isHost();
+  const off = new Set(host ? wlOff() : (S.wlDisabled || []));
+  const cards = wlPackCards(pack.id);
+  const on = cards.filter(c => !off.has(c.id)).length;
+  $('wl-modal-title').textContent = `${pack.emoji} ${pack.name}`;
+  $('wl-modal-body').innerHTML = cards.map(c =>
+    `<div class="card-pill${off.has(c.id) ? ' off' : ''}${host ? '' : ' readonly'}" data-card="${c.id}">
+       ${esc(c.left)} ↔ ${esc(c.right)}</div>`).join('');
+  $('wl-modal-count').textContent = `${on} of ${cards.length} on` + (host ? ' — tap a card to switch it off' : '');
+  $('wl-all-on').style.display = $('wl-all-off').style.display = host ? '' : 'none';
+  if (host) $('wl-modal-body').querySelectorAll('[data-card]').forEach(el =>
+    el.onclick = () => wlToggle(el.dataset.card));
+}
+$('wl-close').onclick = closeWlModal;
+$('wl-done').onclick = closeWlModal;
+$('wl-modal').onclick = (e) => { if (e.target.id === 'wl-modal') closeWlModal(); };
+$('wl-all-on').onclick = () => {
+  const ids = new Set(wlPackCards(wlModalPack).map(c => c.id));
+  wlSetOff(wlOff().filter(id => !ids.has(id)));
+  renderWlPacks(); renderWlModal();
+};
+$('wl-all-off').onclick = () => {
+  const list = wlOff();
+  for (const c of wlPackCards(wlModalPack)) if (!list.includes(c.id)) list.push(c.id);
+  wlSetOff(list);
+  renderWlPacks(); renderWlModal();
+};
+
 function renderLobby() {
   show('scr-lobby');
   loadShare();
@@ -440,7 +605,10 @@ function renderLobby() {
       <div class="row" style="margin-bottom:10px">
         ${[3, 4, 5].map(r => `<button data-prompts="${r}" class="secondary" ${host ? '' : 'disabled'} style="${(S.promptsEach || 3) === r ? 'outline:2px solid var(--band2)' : ''}">${r} each</button>`).join('')}
       </div>
+      <div id="wl-packs"></div>
       ${coop ? `<input type="text" id="team-name-input" placeholder="Team name (for the leaderboard)" maxlength="24" ${host ? '' : 'disabled'} value="${esc(S.teamName || '')}">` : ''}`;
+    wlLoadCatalogue(renderWlPacks);
+    renderWlPacks();
     if (host) {
       opts.querySelector('#mode-teams').onclick = () => socket.emit('set_mode', { mode: 'teams' });
       opts.querySelector('#mode-coop').onclick = () => socket.emit('set_mode', { mode: 'coop' });
@@ -448,6 +616,13 @@ function renderLobby() {
       const tn = opts.querySelector('#team-name-input');
       if (tn) tn.addEventListener('change', () => socket.emit('set_team_name', { name: tn.value }));
     }
+  }
+
+  // push this browser's switched-off cards to the room the first time we host it
+  if (host && S.gameName === 'wavelength') {
+    const mine = wlOff().slice().sort().join('|');
+    const theirs = (S.wlDisabled || []).slice().sort().join('|');
+    if (mine !== theirs) socket.emit('set_wl_cards', { disabled: wlOff() });
   }
 
   // teams vs flat player list
