@@ -349,6 +349,20 @@ function me() { return S && S.players.find(p => p.id === S.you); }
 function playerName(id) { const p = S && S.players.find(p => p.id === id); return p ? p.name : '?'; }
 function esc(x) { return String(x).replace(/</g, '&lt;'); }
 function act(type, extra) { socket.emit('action', Object.assign({ type }, extra || {})); }
+
+// What you've typed but not yet submitted, kept out of the DOM so a re-render
+// can't take it with it. Any <input data-draft="key"> is remembered under that
+// key; make the key describe WHAT is being typed about (which prompt, which
+// card) so a draft can never reappear under a different question.
+const drafts = new Map();
+document.addEventListener('input', e => {
+  const key = e.target && e.target.dataset && e.target.dataset.draft;
+  if (key) drafts.set(key, e.target.value);
+});
+function draftGet(key, fallback) {
+  return drafts.has(key) ? drafts.get(key) : fallback;
+}
+function draftClear(key) { drafts.delete(key); }
 function isHost() { return S && S.you === S.hostId; }
 
 // ---------- join / create ----------
@@ -576,6 +590,7 @@ $('wl-all-off').onclick = () => {
 };
 
 function renderLobby() {
+  drafts.clear();
   show('scr-lobby');
   loadShare();
   $('lobby-code').textContent = S.code;

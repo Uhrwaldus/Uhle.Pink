@@ -35,7 +35,7 @@
           html += `<p class="big" style="text-align:center">Your clue: <b>${esc(g.yourClue)}</b> ✔ — waiting (${g.cluesIn}/${g.cluesNeeded})</p>`;
         } else {
           html += `<p style="text-align:center;color:var(--muted)">write ONE word to lead ${esc(playerName(g.guesserId))} to it — but if someone writes the same clue, both vanish!</p>
-            <input type="text" id="jo-clue" placeholder="one word…" maxlength="24">
+            <input type="text" id="jo-clue" data-draft="jo:clue:${g.round}" placeholder="one word…" maxlength="24" value="${esc(draftGet('jo:clue:' + g.round, ''))}">
             <button id="jo-clue-btn" style="width:100%">Submit clue</button>`;
         }
       }
@@ -46,7 +46,7 @@
           ? g.visibleClues.map(c => `<span class="pill" style="font-size:1.1rem;border:1px solid var(--band2)">${esc(c)}</span>`).join('')
           : '<span class="pill" style="color:var(--red)">💀 every clue got cancelled…</span>'}</div>`;
       if (g.isGuesser) {
-        html += `<input type="text" id="jo-guess" placeholder="your guess…" maxlength="30">
+        html += `<input type="text" id="jo-guess" data-draft="jo:guess:${g.round}" placeholder="your guess…" maxlength="30" value="${esc(draftGet('jo:guess:' + g.round, ''))}">
           <div class="row"><button id="jo-guess-btn">Guess!</button><button id="jo-pass" class="secondary">Pass 😔</button></div>`;
       } else {
         html += `<p class="big" style="text-align:center">🤞 ${esc(playerName(g.guesserId))} is thinking… (word: <b>${esc(g.word)}</b>)</p>`;
@@ -78,6 +78,7 @@
       if (!w) return toast('Write a clue');
       if (w.includes(' ')) return toast('ONE word only!');
       el.blur();
+      draftClear('jo:clue:' + g.round);
       act('clue', { word: w });
     };
     const gb = root.querySelector('#jo-guess-btn');
@@ -86,6 +87,7 @@
       const w = el.value.trim();
       if (!w) return toast('Type a guess');
       el.blur();
+      draftClear('jo:guess:' + g.round);
       act('guess', { word: w });
     };
     const pass = root.querySelector('#jo-pass');

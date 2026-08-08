@@ -186,13 +186,14 @@
 
     const box = root.querySelector('#wl-write');
     if (!a) { box.innerHTML = '<p class="big">waiting…</p>'; return; }
+    const draftKey = `wl:${writeIdx}:${a.card[0]}|${a.card[1]}`;
     box.innerHTML = `
       <p class="big">Write a clue that lands on the target between <b>${esc(a.card[0])}</b> and <b>${esc(a.card[1])}</b>.</p>
       <div class="row" style="margin-bottom:8px">
         <button id="rr-t" class="secondary" ${a.rerolls.target ? 'disabled' : ''}>🎲 target ${a.rerolls.target ? '(used)' : ''}</button>
         <button id="rr-c" class="secondary" ${a.rerolls.card ? 'disabled' : ''}>🃏 card ${a.rerolls.card ? '(used)' : ''}</button>
       </div>
-      <input type="text" id="wl-clue-in" placeholder="your clue…" maxlength="60" value="${a.clue ? esc(a.clue) : ''}">
+      <input type="text" id="wl-clue-in" data-draft="${esc(draftKey)}" placeholder="your clue…" maxlength="60" value="${esc(draftGet(draftKey, a.clue || ''))}">
       <button id="wl-clue-btn" style="width:100%">${a.clue ? 'Update clue' : 'Save clue'}</button>`;
 
     box.querySelector('#rr-t').onclick = () => act('reroll_target', { idx: writeIdx });
@@ -202,6 +203,7 @@
       const clue = input.value.trim();
       if (!clue) return toast('Write a clue first');
       input.blur(); // this field is finished — don't restore it into the next prompt
+      draftClear(draftKey);
       act('clue', { idx: writeIdx, clue });
       const nextEmpty = list.findIndex((p, i) => i !== writeIdx && !p.clue);
       if (nextEmpty >= 0) writeIdx = nextEmpty;

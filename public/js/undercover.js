@@ -48,7 +48,7 @@
       html += `<p style="text-align:center;color:var(--muted);font-size:.8rem">speaking order: ${g.descOrder.map((id, i) => `${i < g.turnIdx ? '✔' : ''}${esc(playerName(id))}`).join(' → ')}</p>`;
       if (myTurn) {
         html += `<p class="big" style="text-align:center">Your turn — describe your word in one word or short phrase:</p>
-          <input type="text" id="uc-desc" placeholder="your description…" maxlength="60">
+          <input type="text" id="uc-desc" data-draft="uc:desc:${g.round}:${g.turnIdx}" placeholder="your description…" maxlength="60" value="${esc(draftGet('uc:desc:' + g.round + ':' + g.turnIdx, ''))}">
           <button id="uc-desc-btn" style="width:100%">Say it</button>`;
       } else {
         html += `<p class="big" style="text-align:center">🎙 ${esc(playerName(g.describer))} is describing…</p>`;
@@ -67,7 +67,7 @@
     if (g.phase === 'whiteguess') {
       if (g.pendingWhite === S.you) {
         html += `<p class="big" style="text-align:center;color:var(--band4)">🕵️ Last chance! Guess the civilian word to steal the win:</p>
-          <input type="text" id="uc-guess" placeholder="the word is…" maxlength="30">
+          <input type="text" id="uc-guess" data-draft="uc:white" placeholder="the word is…" maxlength="30" value="${esc(draftGet('uc:white', ''))}">
           <button id="uc-guess-btn" class="red" style="width:100%">Guess!</button>`;
       } else {
         html += `<p class="big" style="text-align:center">😱 ${esc(playerName(g.pendingWhite))} was MR. WHITE — guessing the word…</p>`;
@@ -97,6 +97,7 @@
       const t = el.value.trim();
       if (!t) return toast('Say something!');
       el.blur();
+      draftClear('uc:desc:' + g.round + ':' + g.turnIdx);
       act('describe', { text: t });
     };
     root.querySelectorAll('[data-vote]').forEach(b => b.onclick = () => act('vote', { pid: b.dataset.vote }));
@@ -106,6 +107,7 @@
       const w = el.value.trim();
       if (!w) return toast('Type your guess');
       el.blur();
+      draftClear('uc:white');
       act('white_guess', { word: w });
     };
     const _e = root.querySelector('.ll-log-box .entries');
