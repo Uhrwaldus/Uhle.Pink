@@ -214,6 +214,43 @@
     root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { writeIdx = +b.dataset.tab; renderWrite(root, g); });
   }
 
+  // Who scored what, from the recorded history: one block per clue-giver,
+  // their clues underneath, best total first.
+  function breakdown(g) {
+    const h = g.history || [];
+    if (!h.length) return '';
+    const by = new Map();
+    for (const e of h) {
+      if (!by.has(e.pid)) by.set(e.pid, { pid: e.pid, team: e.team, pts: 0, rows: [] });
+      const r = by.get(e.pid);
+      r.pts += e.guessPts;
+      r.rows.push(e);
+    }
+    const people = [...by.values()].sort((a, b) => b.pts - a.pts);
+    const best = people.length ? people[0].pts : 0;
+    const dot = pts => pts === 4 ? 'var(--band2)' : pts === 3 ? 'var(--band3)' : pts === 2 ? 'var(--band4)' : 'var(--muted)';
+
+    return `<div class="side-box" id="wl-breakdown" style="margin-top:12px">
+      <h4 style="margin-bottom:8px">📊 who scored what</h4>
+      ${people.map(pl => `
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;
+                      border-bottom:1px solid #ffffff14;padding-bottom:3px;margin-bottom:4px">
+            <b style="${pl.team ? `color:${teamColor(pl.team)}` : ''}">${esc(playerName(pl.pid))}${pl.pts === best && best > 0 ? ' 👑' : ''}</b>
+            <span>${pl.pts} pt${pl.pts === 1 ? '' : 's'} <span style="color:var(--muted);font-size:.8rem">from ${pl.rows.length}</span></span>
+          </div>
+          ${pl.rows.map(e => `
+            <div style="display:flex;justify-content:space-between;gap:8px;font-size:.82rem;padding:2px 0">
+              <span style="color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                “${esc(e.clue || '—')}” <span style="opacity:.65">· ${esc(e.card[0])}/${esc(e.card[1])}</span></span>
+              <span style="color:${dot(e.guessPts)};white-space:nowrap">${e.guessPts}${e.counterPts ? ' <span style="color:var(--muted)">+1↔</span>' : ''}</span>
+            </div>`).join('')}
+        </div>`).join('')}
+      <div style="color:var(--muted);font-size:.75rem;text-align:center;margin-top:4px">
+        points their clue earned the guessers${g.mode === 'teams' ? ' · +1↔ = the other team stole a counter point' : ''}</div>
+    </div>`;
+  }
+
   // ----- phase 2: play the queue -----
   function renderPlay(root, g) {
     const isWriter = g.writerId === S.you;
@@ -320,6 +357,7 @@
       } else {
         p(`<div class="winner-banner" style="color:${teamColor(g.winner)}">🏆 ${teamLabel(g.winner)} team wins ${Math.max(g.scores.blue, g.scores.red)}–${Math.min(g.scores.blue, g.scores.red)}!</div>`);
       }
+      p(breakdown(g));
       p(rematchRow(isHost()));
     }
   }

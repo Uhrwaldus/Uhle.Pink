@@ -202,6 +202,7 @@ function create(room) {
     dialPos: 50,
     counterVotes: {}, counterTie: false, counterGuess: null,
     result: null,
+    history: [],   // one entry per prompt played — powers the end-of-game breakdown
     locks: {},
     pins: {},
     winner: null, recorded: false, lbRank: null,
@@ -431,6 +432,15 @@ function applyTeams(room, guessPts, counterCorrect) {
 
 function finishPrompt(room, result) {
   const s = room.state;
+  const a = cur(s);
+  const e = entry(s);
+  s.history.push({
+    pid: e ? e.pid : null,
+    team: writerTeam(room) || null,
+    card: a.card, target: a.target, clue: a.clue,
+    guess: s.dialPos,
+    guessPts: result.guessPts, counterPts: result.counterPts,
+  });
   s.result = result;
   s.phase = 'reveal';
   s.locks = {};
@@ -503,6 +513,7 @@ function viewFor(room, player) {
     votesNeeded: counterTeam ? teamMembers(room, counterTeam).filter(p => p.connected).length : 0,
     youVoted: !!s.counterVotes[player.id],
     result: revealed ? s.result : null,
+    history: s.phase === 'gameover' ? s.history : null,
     locksIn: need.filter(id => s.locks[id]).length,
     locksNeeded: need.length,
     youLocked: !!s.locks[player.id],
