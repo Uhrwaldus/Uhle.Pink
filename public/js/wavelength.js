@@ -4,6 +4,26 @@
   let localDial = 50, dragging = false, lastSent = 0;
   let writeIdx = 0; // which of your own prompts you're editing
 
+  // ---- pins: everyone's "I reckon it's about here" markers ----
+  // A pin is advisory only. It never moves the needle and never clears a
+  // lock, so people can point without wrestling over the one dial.
+  let pins = [];            // [{ id, pos, name }]
+  let myPin = null;         // your own position, or null
+  let pinPlanted = false;   // once you click, hover stops dragging your pin
+  let lastPinSent = 0, seenPrompt = null, gesture = null;
+
+  const PIN_COLORS = ['#ff7ab6', '#5ad1c4', '#ffd166', '#8ab4ff', '#c792ea', '#7bd88f', '#ff9f6e'];
+  function pinColor(id) {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return PIN_COLORS[h % PIN_COLORS.length];
+  }
+  function initials(name) {
+    const parts = String(name || '?').trim().split(/\s+/);
+    const raw = parts.length > 1 ? parts[0][0] + parts[1][0] : String(name || '?').slice(0, 2);
+    return raw.toUpperCase();
+  }
+
   function polar(pos, r) {
     const th = Math.PI * (1 - pos / 100);
     return [CX + r * Math.cos(th), CY - r * Math.sin(th)];
@@ -17,7 +37,7 @@
 
   // ---------- dial ----------
   function dialSVG() { return document.getElementById('wl-dial'); }
-  function drawDial(target, needle) {
+  function drawDial(target, needle, marks) {
     const svg = dialSVG();
     if (!svg) return;
     let els = `<path d="${wedge(0, 100, R)}" fill="#2b3046"/>`;
@@ -41,6 +61,17 @@
       const [x1, y1] = polar(i * 10, R), [x2, y2] = polar(i * 10, R - 8);
       els += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#12141c" stroke-width="2"/>`;
     }
+    // pins sit under the needle so the real dial always reads on top
+    (marks || []).forEach((m, i) => {
+      const rr = R * (0.86 - (i % 3) * 0.13);
+      const [px, py] = polar(m.pos, rr);
+      const [ax, ay] = polar(m.pos, R * 0.34);
+      const col = pinColor(m.id);
+      const mine = !!(S && m.id === S.you);
+      els += `<line x1="${ax}" y1="${ay}" x2="${px}" y2="${py}" stroke="${col}" stroke-width="${mine ? 3 : 2}" opacity="${mine ? .95 : .6}" stroke-linecap="round"/>`;
+      els += `<circle cx="${px}" cy="${py}" r="11" fill="${col}" opacity="${mine ? 1 : .85}" stroke="#12141c" stroke-width="${mine ? 2 : 1}"><title>${m.name}</title></circle>`;
+      els += `<text x="${px}" y="${py + 3.5}" fill="#12141c" font-size="10" font-weight="800" text-anchor="middle" pointer-events="none">${initials(m.name)}</text>`;
+    });
     if (needle !== null && needle !== undefined) {
       const [nx, ny] = polar(needle, R - 14);
       els += `<line x1="${CX}" y1="${CY}" x2="${nx}" y2="${ny}" stroke="#fff" stroke-width="4" stroke-linecap="round"/>`;
@@ -48,35 +79,64 @@
     }
     svg.innerHTML = els;
   }
-  function posFrom(e, svg) {
+  function svgXY(e, svg) {
     const rect = svg.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (400 / rect.width);
-    const y = (e.clientY - rect.top) * (400 / rect.width);
+    return [(e.clientX - rect.left) * (400 / rect.width), (e.clientY - rect.top) * (400 / rect.width)];
+  }
+  function posFrom(e, svg) {
+    const [x, y] = svgXY(e, svg);
     const th = Math.atan2(CY - y, x - CX);
     return Math.max(0, Math.min(100, (1 - Math.max(0, Math.min(Math.PI, th)) / Math.PI) * 100));
   }
   function canDragNow() {
     return !!(S && S.game && S.game.phase === 'guess' && S.game.youCanGuess);
   }
+  // Grabbing the needle (or the hub) moves the real dial; anywhere else on
+  // the arc is just you pointing. Generous radius so it works with thumbs.
+  function onNeedle(x, y) {
+    const [nx, ny] = polar(localDial, R - 14);
+    return Math.hypot(x - nx, y - ny) < 42 || Math.hypot(x - CX, y - CY) < 42;
+  }
   function bindDial(svg) {
     svg.addEventListener('pointerdown', e => {
       if (!canDragNow()) return;
-      dragging = true;
+      const [x, y] = svgXY(e, svg);
+      gesture = onNeedle(x, y) ? 'dial' : 'pin';
+      dragging = gesture === 'dial';
       svg.setPointerCapture(e.pointerId);
-      moveTo(posFrom(e, svg));
+      if (gesture === 'dial') moveTo(posFrom(e, svg));
+      else { pinPlanted = true; setPin(posFrom(e, svg)); }
     });
-    svg.addEventListener('pointermove', e => { if (dragging) moveTo(posFrom(e, svg)); });
+    svg.addEventListener('pointermove', e => {
+      if (gesture === 'dial') return moveTo(posFrom(e, svg));
+      if (gesture === 'pin') return setPin(posFrom(e, svg));
+      // mouse users get a live cursor on the arc until they click to plant it
+      if (e.pointerType === 'mouse' && canDragNow() && !pinPlanted) setPin(posFrom(e, svg));
+    });
     svg.addEventListener('pointerup', () => {
-      if (!dragging) return;
+      if (gesture === 'dial') socket.emit('dial', { pos: localDial });
+      if (gesture === 'pin') socket.emit('pin', { pos: myPin });
+      gesture = null;
       dragging = false;
-      socket.emit('dial', { pos: localDial });
     });
+  }
+  function redraw() {
+    if (S && S.game && dialSVG()) drawDial(S.game.target, localDial, pins);
   }
   function moveTo(pos) {
     localDial = pos;
-    drawDial(null, localDial);
+    drawDial(S && S.game ? S.game.target : null, localDial, pins);
     const now = Date.now();
     if (now - lastSent > 50) { lastSent = now; socket.emit('dial', { pos }); }
+  }
+  function setPin(pos) {
+    myPin = pos;
+    const me = pins.find(m => m.id === S.you);
+    if (me) me.pos = pos;
+    else pins.push({ id: S.you, pos, name: playerName(S.you) });
+    redraw();
+    const now = Date.now();
+    if (now - lastPinSent > 60) { lastPinSent = now; socket.emit('pin', { pos }); }
   }
 
   // ---------- render ----------
@@ -122,7 +182,7 @@
       </div></div>`;
 
     bindDial(dialSVG());
-    drawDial(a ? a.target : null, null);
+    drawDial(a ? a.target : null, null, []);
 
     const box = root.querySelector('#wl-write');
     if (!a) { box.innerHTML = '<p class="big">waiting…</p>'; return; }
@@ -156,6 +216,12 @@
   function renderPlay(root, g) {
     const isWriter = g.writerId === S.you;
     if (!dragging) localDial = g.dialPos;
+    if (seenPrompt !== g.promptNum) { seenPrompt = g.promptNum; pinPlanted = false; myPin = null; }
+    if (gesture !== 'pin') {
+      pins = (g.pins || []).slice();
+      const me = pins.find(m => m.id === S.you);
+      myPin = me ? me.pos : null;
+    }
 
     root.innerHTML = `<div class="wl-layout">
       <div class="wl-left">
@@ -170,16 +236,20 @@
       </div></div>`;
 
     bindDial(dialSVG());
-    drawDial(g.target, localDial);
+    drawDial(g.target, localDial, pins);
 
     const box = root.querySelector('#wl-phase');
     const p = html => { const d = document.createElement('div'); d.innerHTML = html; box.appendChild(d); return d; };
 
     if (g.phase === 'guess') {
       if (g.youCanGuess) {
-        p(`<p class="big">Drag the dial to where <b>"${esc(g.clue)}"</b> lands. Talk it out!</p>`);
+        p(`<p class="big">Where does <b>"${esc(g.clue)}"</b> land? Tap the arc to drop your marker — talk it out!</p>`);
         if (g.locksNeeded > 1) {
-          p(`<p style="color:var(--muted);font-size:.8rem">everyone guessing must lock in — moving the dial resets it</p>`);
+          p(`<p style="color:var(--muted);font-size:.8rem">markers are just opinions. Drag the <b>needle</b> to set the real answer — that resets everyone's lock</p>`);
+        }
+        if (myPin !== null && Math.abs(myPin - localDial) > 0.5) {
+          const d = p(`<button class="secondary" style="width:100%">⇒ Move the dial to my marker</button>`);
+          d.querySelector('button').onclick = () => { moveTo(myPin); socket.emit('dial', { pos: myPin }); };
         }
         if (g.youLocked) {
           const b = p(`<button class="secondary" style="width:100%">🔓 Locked ✔ ${g.locksIn}/${g.locksNeeded} — tap to unlock</button>`);
@@ -257,7 +327,16 @@
     onDial(pos) {
       if (dragging) return;
       localDial = pos;
-      if (S && S.game && dialSVG()) drawDial(S.game.target, localDial);
+      redraw();
+    },
+    onPins(list) {
+      const mine = gesture === 'pin' ? pins.find(m => m.id === S.you) : null;
+      pins = (list || []).slice();
+      if (mine) { // don't let a round-trip yank your own marker mid-drag
+        const me = pins.find(m => m.id === S.you);
+        if (me) me.pos = mine.pos; else pins.push(mine);
+      }
+      redraw();
     },
   };
 })();

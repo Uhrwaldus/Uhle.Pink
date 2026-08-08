@@ -196,6 +196,69 @@ async function testCoop() {
   Object.values(players).forEach(p => p.disconnect());
 }
 
+// Pins: advisory markers. Must not move the dial, must not clear locks,
+// must be refused for the clue writer, and must clear between prompts.
+async function testPins() {
+  const names = ['A', 'B', 'C'];
+  const { players, states } = await room(names, async (pl) => {
+    pl.A.emit('set_mode', { mode: 'coop' });
+    pl.A.emit('set_prompts', { prompts: 1 });
+    await wait(250);
+  });
+  players.A.emit('start_game');
+  await wait(400);
+  await writeAll(players, states, names);
+  let g = states.A.game;
+  assert(g.phase === 'guess', 'pins: expected guess phase');
+
+  const writer = byId(states, names, g.writerId);
+  const others = names.filter(n => n !== writer);
+  const seen = {};
+  names.forEach(n => players[n].on('pins', ({ pins }) => { seen[n] = pins; }));
+
+  const dialBefore = states.A.game.dialPos;
+  players[others[0]].emit('action', { type: 'lock' });
+  await wait(200);
+  assert(states.A.game.locksIn === 1, 'pins: setup lock did not register');
+
+  players[others[0]].emit('pin', { pos: 77 });
+  await wait(250);
+  assert(seen[others[1]] && seen[others[1]].some(m => m.pos === 77), 'pins: other players must see the pin');
+  assert(seen[writer] && seen[writer].length === 1, 'pins: writer should still see the pin');
+  assert(states.A.game.dialPos === dialBefore, 'pins: a pin must not move the dial');
+  assert(states.A.game.locksIn === 1, 'pins: a pin must not clear locks, got ' + states.A.game.locksIn);
+  console.log('pins: broadcast OK, dial + locks untouched');
+
+  players[writer].emit('pin', { pos: 12 });
+  await wait(200);
+  const all = seen[others[0]] || [];
+  assert(!all.some(m => m.id === states[writer].you), 'pins: the clue writer must not be able to point');
+  console.log('pins: writer pin refused OK');
+
+  // clearing your own pin
+  players[others[0]].emit('pin', { pos: null });
+  await wait(200);
+  assert((seen[others[1]] || []).length === 0, 'pins: null must remove your pin');
+  console.log('pins: clear OK');
+
+  // pins ride along in state too, so a reconnecting player sees them
+  players[others[0]].emit('pin', { pos: 40 });
+  await wait(200);
+  players[others[0]].emit('action', { type: 'unlock' }); // any full state push
+  await wait(250);
+  assert((states[others[1]].game.pins || []).length === 1, 'pins: pins must ride along in state for reconnects');
+  console.log('pins: present in state push OK');
+
+  players[others[0]].emit('action', { type: 'lock' });
+  await wait(150);
+  players[others[1]].emit('action', { type: 'lock' });
+  await wait(300);
+  assert(states.A.game.phase === 'reveal', 'pins: guess should have resolved');
+  assert((states.A.game.pins || []).length === 0, 'pins: must clear on reveal');
+  console.log('pins: cleared on reveal OK');
+  Object.values(players).forEach(p => p.disconnect());
+}
+
 async function testRoom() {
   const names = ['H', 'J'];
   const { players, states, code } = await room(names);
@@ -226,6 +289,7 @@ async function main() {
   try {
     if (!only || only === 'teams') await testTeams();
     if (!only || only === 'coop') await testCoop();
+    if (!only || only === 'pins') await testPins();
     if (!only || only === 'room') await testRoom();
     console.log('\nALL TESTS PASSED');
   } catch (e) {

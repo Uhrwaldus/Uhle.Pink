@@ -408,6 +408,10 @@ $('site-title').onclick = () => {
   if (S.game) { lobbyPeek = true; renderLobby(); }
   else renderLobby();
 };
+socket.on('pins', ({ pins }) => {
+  if (GameUI.wavelength && GameUI.wavelength.onPins) GameUI.wavelength.onPins(pins);
+});
+
 socket.on('dial', ({ pos }) => {
   if (GameUI.wavelength && GameUI.wavelength.onDial) GameUI.wavelength.onDial(pos);
 });

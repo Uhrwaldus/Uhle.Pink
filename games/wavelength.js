@@ -203,6 +203,7 @@ function create(room) {
     counterVotes: {}, counterTie: false, counterGuess: null,
     result: null,
     locks: {},
+    pins: {},
     winner: null, recorded: false, lbRank: null,
     log: [],
   };
@@ -285,6 +286,33 @@ function guessPoints(target, pos) {
   const d = Math.abs(target - pos);
   for (const [width, pts] of BANDS) if (d <= width) return pts;
   return 0;
+}
+
+// ---- pins -------------------------------------------------------------
+// A pin is "here's where I reckon it is" — purely advisory. It never touches
+// dialPos and never clears anyone's lock, so people can show an opinion
+// without three of them fighting over the one needle.
+function pinList(room) {
+  const s = room.state;
+  if (!s || !s.pins) return [];
+  return Object.keys(s.pins)
+    .filter(id => room.players.has(id))
+    .map(id => ({ id, pos: s.pins[id], name: nameOf(room, id) }));
+}
+
+function handlePin(room, player, pos) {
+  const s = room.state;
+  if (!s || s.phase !== 'guess') return null;
+  // same eligibility as the dial: the clue writer never gets to point,
+  // and in teams mode only the guessing team shows up on the arc.
+  if (!canGuess(room, player)) return null;
+  if (pos === null) {
+    delete s.pins[player.id];
+    return pinList(room);
+  }
+  if (typeof pos !== 'number' || !isFinite(pos)) return null;
+  s.pins[player.id] = Math.max(0, Math.min(100, pos));
+  return pinList(room);
 }
 
 function handleDial(room, player, pos) {
@@ -406,6 +434,7 @@ function finishPrompt(room, result) {
   s.result = result;
   s.phase = 'reveal';
   s.locks = {};
+  s.pins = {};
   s.log.push(`${nameOf(room, writerId(s))}: "${cur(s).clue}" → ${result.guessPts} pt${result.guessPts === 1 ? '' : 's'}${result.counterPts ? ' (+1 counter)' : ''}`);
 }
 
@@ -416,6 +445,7 @@ function advance(room) {
   s.counterVotes = {}; s.counterTie = false; s.counterGuess = null;
   s.result = null;
   s.locks = {};
+  s.pins = {};
   if (s.qi >= s.queue.length) {
     s.phase = 'gameover';
     if (s.mode === 'teams') {
@@ -465,6 +495,7 @@ function viewFor(room, player) {
     clue: c ? c.clue : null,
     target: c && (isWriter || revealed) ? c.target : null,
     dialPos: s.dialPos,
+    pins: s.phase === 'guess' ? pinList(room) : [],
     youCanGuess: canGuess(room, player),
     counterGuess: s.counterGuess,
     counterTie: s.counterTie,
@@ -484,4 +515,4 @@ function viewFor(room, player) {
   };
 }
 
-module.exports = { canStart, create, handleAction, handleDial, viewFor, PROMPT_OPTIONS, CARDS, PACKS };
+module.exports = { canStart, create, handleAction, handleDial, handlePin, viewFor, PROMPT_OPTIONS, CARDS, PACKS };

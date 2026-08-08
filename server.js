@@ -306,6 +306,17 @@ io.on('connection', (socket) => {
     if (res.resetLocks) broadcast(room);
   });
 
+  // Advisory "I think it's about here" markers. Deliberately does NOT go
+  // through broadcast() — pins move constantly and must not reset locks.
+  socket.on('pin', ({ pos }) => {
+    if (!room || !player || !room.state) return;
+    const game = GAMES[room.gameName];
+    if (!game.handlePin) return;
+    const pins = game.handlePin(room, player, pos === null ? null : pos);
+    if (!pins) return;
+    io.to(room.code).emit('pins', { pins });
+  });
+
   socket.on('disconnect', () => {
     if (!room || !player) return;
     player.connected = false;
